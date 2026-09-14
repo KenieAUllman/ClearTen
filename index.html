@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ClearTen</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header class="top-bar">
+      <h1 class="title">ClearTen</h1>
+      <div class="move-count">Moves: <span id="move-count">0</span></div>
+    </header>
+
+    <main class="board-area">
+      <svg id="board-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="end-overlay" class="end-overlay" hidden>
+        <div class="end-card">
+          <p id="end-message" class="end-message"></p>
+          <div class="end-actions">
+            <button id="end-try-again" class="btn btn-primary">Try Again</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="bottom-bar">
+      <div class="pieces-section">
+        <div class="pieces-label">Current</div>
+        <div id="current-pieces" class="piece-row current-row"></div>
+      </div>
+      <div class="pieces-section">
+        <div class="pieces-label">Upcoming</div>
+        <div id="upcoming-pieces" class="piece-row upcoming-row"></div>
+      </div>
+      <div class="controls-row">
+        <button id="undo-btn" class="btn btn-secondary">Undo</button>
+        <button id="restart-btn" class="btn btn-secondary">Restart</button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="gamelogic.js"></script>
+  <script src="config.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
