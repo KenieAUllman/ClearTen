@@ -51,11 +51,23 @@ body {
   padding: 18px 20px 8px;
 }
 
+.title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
 .title {
   margin: 0;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+.level-name {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 600;
 }
 
 .move-count {
@@ -121,9 +133,22 @@ body {
   opacity: 0;
 }
 
+.token.falling {
+  transition: cy 260ms cubic-bezier(0.4, 0, 0.8, 1);
+}
+
+.token.emphasize {
+  animation: emphasize-pulse 480ms ease-in-out 2;
+}
+
 @keyframes pop-in {
   from { transform: scale(0.3); opacity: 0.2; }
   to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes emphasize-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.25); }
 }
 
 .debug-label {
@@ -131,6 +156,69 @@ body {
   fill: var(--ink-soft);
   pointer-events: none;
   text-anchor: middle;
+}
+
+/* ---------- Onboarding: intro banner + first-clear callout ---------- */
+
+.intro-banner {
+  position: absolute;
+  top: 10px;
+  left: 16px;
+  right: 16px;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 400ms ease;
+}
+
+.intro-banner[hidden] {
+  display: none;
+}
+
+.intro-banner.fading {
+  opacity: 0;
+}
+
+.intro-banner p {
+  margin: 0;
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 16px;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  text-align: center;
+}
+
+.clear-callout {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  z-index: 6;
+  transform: translate(-50%, -50%) scale(0.7);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  padding: 14px 22px;
+  border-radius: 16px;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.clear-callout[hidden] {
+  display: none;
+}
+
+.clear-callout.show {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
 }
 
 /* ---------- Bottom bar / pieces ---------- */
@@ -216,6 +304,10 @@ body {
   font-weight: 600;
   cursor: pointer;
   min-height: 48px;
+}
+
+.btn[hidden] {
+  display: none;
 }
 
 .btn:active {

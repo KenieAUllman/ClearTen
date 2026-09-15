@@ -260,12 +260,31 @@
     return next;
   }
 
-  // Repeats clear -> gravity -> clear -> ... until no more groups qualify.
-  // `events` records each clear step so the UI can animate cascades one at
-  // a time instead of jumping straight to the final settled board.
+  // Settles a board after a placement: gravity ALWAYS runs first (any
+  // newly placed token, or any previously-supported token left dangling by
+  // an earlier change, drops to the bottom of its column), and only then do
+  // we check for qualifying groups. This must happen even when nothing
+  // ends up clearing -- gravity is not conditional on a clear occurring.
+  //
+  // After that initial settle, this repeats clear -> gravity -> clear -> ...
+  // until no more groups qualify. `events` records each clear step (plus
+  // the initial settle, as a clear-less event) so the UI can animate each
+  // stage in turn instead of jumping straight to the final board.
   function resolveCascade(board, threshold) {
-    var current = board;
     var events = [];
+
+    var settled = applyGravity(board);
+    if (!boardsEqual(board, settled)) {
+      events.push({
+        groups: [],
+        clearedCount: 0,
+        boardBeforeGravity: board,
+        boardAfterClear: board,
+        boardAfterGravity: settled
+      });
+    }
+    var current = settled;
+
     while (true) {
       var groups = findAllQualifyingGroups(current, threshold);
       if (groups.length === 0) break;
@@ -274,12 +293,46 @@
       events.push({
         groups: groups,
         clearedCount: clearResult.clearedCount,
+        boardBeforeGravity: clearResult.board,
         boardAfterClear: clearResult.board,
         boardAfterGravity: afterGravity
       });
       current = afterGravity;
     }
     return { board: current, events: events };
+  }
+
+  function boardsEqual(a, b) {
+    var keys = Object.keys(a.cells);
+    for (var i = 0; i < keys.length; i++) {
+      if (a.cells[keys[i]] !== b.cells[keys[i]]) return false;
+    }
+    return true;
+  }
+
+  // Given a board and the result of applyGravity(board), returns which
+  // tokens actually moved: [{col, fromSlot, toSlot, color}, ...]. Gravity
+  // only ever compacts a column's occupied slots toward 0 while preserving
+  // their relative order, so the i-th occupied slot (bottom-to-top) before
+  // always corresponds to the i-th occupied slot after -- this just reads
+  // off that pairing per column. Used by the UI to animate falls without
+  // the engine needing to track per-token identity.
+  function computeGravityMoves(beforeBoard, afterBoard) {
+    var moves = [];
+    Object.keys(beforeBoard.columnSlots).forEach(function (colStr) {
+      var col = Number(colStr);
+      var slots = beforeBoard.columnSlots[col];
+      var before = slots.filter(function (s) { return getColor(beforeBoard, col, s) !== null; });
+      var after = slots.filter(function (s) { return getColor(afterBoard, col, s) !== null; });
+      for (var i = 0; i < before.length; i++) {
+        var fromSlot = before[i];
+        var toSlot = after[i];
+        if (fromSlot !== toSlot) {
+          moves.push({ col: col, fromSlot: fromSlot, toSlot: toSlot, color: getColor(beforeBoard, col, fromSlot) });
+        }
+      }
+    });
+    return moves;
   }
 
   function boardIsEmpty(board) {
@@ -314,6 +367,7 @@
     clearGroups: clearGroups,
     applyGravity: applyGravity,
     resolveCascade: resolveCascade,
+    computeGravityMoves: computeGravityMoves,
     boardIsEmpty: boardIsEmpty,
     occupiedCellCount: occupiedCellCount
   };

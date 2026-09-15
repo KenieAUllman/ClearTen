@@ -9,17 +9,24 @@
 <body>
   <div class="app">
     <header class="top-bar">
-      <h1 class="title">ClearTen</h1>
+      <div class="title-group">
+        <h1 class="title">ClearTen</h1>
+        <div class="level-name" id="level-name"></div>
+      </div>
       <div class="move-count">Moves: <span id="move-count">0</span></div>
     </header>
 
     <main class="board-area">
+      <div id="intro-banner" class="intro-banner" hidden>
+        <p id="intro-banner-text"></p>
+      </div>
+      <div id="clear-callout" class="clear-callout" hidden>10+ CLEAR!</div>
       <svg id="board-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
       <div id="end-overlay" class="end-overlay" hidden>
         <div class="end-card">
           <p id="end-message" class="end-message"></p>
           <div class="end-actions">
-            <button id="end-try-again" class="btn btn-primary">Try Again</button>
+            <button id="end-action-btn" class="btn btn-primary"></button>
           </div>
         </div>
       </div>

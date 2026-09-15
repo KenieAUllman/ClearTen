@@ -18,7 +18,9 @@
   var DEBUG = false;
 
   var CLEAR_ANIMATION_MS = 320;
-  var PLACEMENT_POP_MS = 180;
+  var FALL_ANIMATION_MS = 280; // matches the .token.falling CSS transition + a small buffer
+  var FIRST_CLEAR_EMPHASIS_MS = 1100;
+  var INTRO_BANNER_AUTO_DISMISS_MS = 4200;
 
   // ---- Hex pixel geometry --------------------------------------------------
   // Flat-top hexagons. `HEX_SIZE` is the circumradius (center to corner) in
@@ -49,39 +51,47 @@
     return points.join(' ');
   }
 
-  // Precompute pixel centers for every layout cell and the overall bounds,
-  // so the board SVG's viewBox can fit the (irregular) board exactly.
+  // Pixel centers for the CURRENT level's cells and the SVG viewBox that
+  // fits them. Recomputed whenever a level loads (see loadLevelGeometry) so
+  // levels with a different board shape would render correctly too.
   var cellPixels = {}; // key "col_slot" -> {x, y, col, slot}
-  var bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
-  Config.LEVEL_LAYOUT.forEach(function (cell) {
-    var p = pixelForCell(cell.col, cell.slot);
-    cellPixels[Logic.cellKey(cell.col, cell.slot)] = { x: p.x, y: p.y, col: cell.col, slot: cell.slot };
-    bounds.minX = Math.min(bounds.minX, p.x - HEX_SIZE);
-    bounds.maxX = Math.max(bounds.maxX, p.x + HEX_SIZE);
-    bounds.minY = Math.min(bounds.minY, p.y - HEX_SIZE);
-    bounds.maxY = Math.max(bounds.maxY, p.y + HEX_SIZE);
-  });
-  var PADDING = HEX_SIZE * 0.6;
-  var viewBox = {
-    x: bounds.minX - PADDING,
-    y: bounds.minY - PADDING,
-    w: (bounds.maxX - bounds.minX) + PADDING * 2,
-    h: (bounds.maxY - bounds.minY) + PADDING * 2
-  };
+
+  function loadLevelGeometry(level) {
+    cellPixels = {};
+    var bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+    level.layout.forEach(function (cell) {
+      var p = pixelForCell(cell.col, cell.slot);
+      cellPixels[Logic.cellKey(cell.col, cell.slot)] = { x: p.x, y: p.y, col: cell.col, slot: cell.slot };
+      bounds.minX = Math.min(bounds.minX, p.x - HEX_SIZE);
+      bounds.maxX = Math.max(bounds.maxX, p.x + HEX_SIZE);
+      bounds.minY = Math.min(bounds.minY, p.y - HEX_SIZE);
+      bounds.maxY = Math.max(bounds.maxY, p.y + HEX_SIZE);
+    });
+    var padding = HEX_SIZE * 0.6;
+    var viewBox = {
+      x: bounds.minX - padding,
+      y: bounds.minY - padding,
+      w: (bounds.maxX - bounds.minX) + padding * 2,
+      h: (bounds.maxY - bounds.minY) + padding * 2
+    };
+    boardSvg.setAttribute('viewBox', viewBox.x + ' ' + viewBox.y + ' ' + viewBox.w + ' ' + viewBox.h);
+  }
 
   // ---- DOM references -------------------------------------------------------
 
   var boardSvg = document.getElementById('board-svg');
   var moveCountEl = document.getElementById('move-count');
+  var levelNameEl = document.getElementById('level-name');
   var currentPiecesEl = document.getElementById('current-pieces');
   var upcomingPiecesEl = document.getElementById('upcoming-pieces');
   var undoBtn = document.getElementById('undo-btn');
   var restartBtn = document.getElementById('restart-btn');
   var endOverlay = document.getElementById('end-overlay');
   var endMessage = document.getElementById('end-message');
-  var endTryAgain = document.getElementById('end-try-again');
-
-  boardSvg.setAttribute('viewBox', viewBox.x + ' ' + viewBox.y + ' ' + viewBox.w + ' ' + viewBox.h);
+  var endActionBtn = document.getElementById('end-action-btn');
+  var introBanner = document.getElementById('intro-banner');
+  var introBannerText = document.getElementById('intro-banner-text');
+  var clearCallout = document.getElementById('clear-callout');
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
   function svgEl(tag, attrs) {
@@ -92,20 +102,36 @@
     return el;
   }
 
-  // ---- Game state -------------------------------------------------------------
+  // ---- Level / game state -------------------------------------------------------
   // `state.board` and `state.pieceIndex`/`moveCount`/`status` together make
   // up everything Undo/Restart need to restore. `history` is a stack of
   // previous snapshots (deep-ish clones), pushed right before each
   // committed placement, so Undo can pop back any number of moves.
+  //
+  // `currentLevelIndex` lives outside `state` on purpose: it's "which
+  // puzzle are we playing," not part of a single level's move history.
+  // Restart replays the same level; only advancing to the next level (after
+  // a win) changes it.
 
+  var currentLevelIndex = 0;
   var state = null;
 
+  // Whether the player has ever seen the "10+ CLEAR!" first-clear teaching
+  // moment this session. Intentionally NOT reset by Restart or by moving to
+  // a new level -- once the rule has been explained, it stays explained.
+  var hasShownFirstClearTutorial = false;
+
+  function currentLevel() {
+    return Config.LEVELS[currentLevelIndex];
+  }
+
   function buildInitialState() {
-    var board = Logic.withInitialTokens(Logic.createBoard(Config.LEVEL_LAYOUT), Config.INITIAL_TOKENS);
+    var level = currentLevel();
+    var board = Logic.withInitialTokens(Logic.createBoard(level.layout), level.initialTokens);
     return {
       board: board,
       pieceIndex: 3, // pieces 0,1,2 are already "drawn" into currentPieces
-      currentPieces: Config.PIECE_SEQUENCE.slice(0, 3),
+      currentPieces: level.pieceSequence.slice(0, 3),
       moveCount: 0,
       status: 'playing', // 'playing' | 'won' | 'lost'
       history: []
@@ -141,15 +167,25 @@
     state = buildInitialState();
     selectedPieceSlot = null;
     isAnimating = false;
+    loadLevelGeometry(currentLevel());
     hideEndOverlay();
     renderAll();
+    showIntroBannerIfNeeded();
+  }
+
+  function goToNextLevel() {
+    if (currentLevelIndex < Config.LEVELS.length - 1) {
+      currentLevelIndex++;
+    }
+    resetGame();
   }
 
   // ---- Piece queue helpers -----------------------------------------------
 
   function drawNextPiece() {
-    if (state.pieceIndex < Config.PIECE_SEQUENCE.length) {
-      var piece = Config.PIECE_SEQUENCE[state.pieceIndex];
+    var sequence = currentLevel().pieceSequence;
+    if (state.pieceIndex < sequence.length) {
+      var piece = sequence[state.pieceIndex];
       state.pieceIndex++;
       return piece;
     }
@@ -157,7 +193,8 @@
   }
 
   function upcomingPieces() {
-    return Config.PIECE_SEQUENCE.slice(state.pieceIndex, state.pieceIndex + 2);
+    var sequence = currentLevel().pieceSequence;
+    return sequence.slice(state.pieceIndex, state.pieceIndex + 2);
   }
 
   // ---- Rendering: board -----------------------------------------------------
@@ -249,6 +286,10 @@
     });
   }
 
+  function tokenElementAt(col, slot) {
+    return boardSvg.querySelector('circle[data-col="' + col + '"][data-slot="' + slot + '"]');
+  }
+
   // ---- Rendering: piece previews (bottom bar) --------------------------------
 
   function renderPieceShape(piece) {
@@ -306,6 +347,7 @@
 
   function renderTopBar() {
     moveCountEl.textContent = state.moveCount;
+    levelNameEl.textContent = currentLevel().name;
   }
 
   function renderControls() {
@@ -315,21 +357,85 @@
 
   function renderEndState() {
     if (state.status === 'won') {
-      showEndOverlay('Board cleared! You win.');
+      var isLastLevel = currentLevelIndex === Config.LEVELS.length - 1;
+      if (isLastLevel) {
+        showEndOverlay('PROTOTYPE COMPLETE', null);
+      } else {
+        showEndOverlay('LEVEL CLEARED', { label: 'Next Level', onClick: goToNextLevel });
+      }
     } else if (state.status === 'lost') {
-      showEndOverlay('No more moves. Try again.');
+      showEndOverlay('No more moves. Try again.', { label: 'Try Again', onClick: resetGame });
     } else {
       hideEndOverlay();
     }
   }
 
-  function showEndOverlay(message) {
+  function showEndOverlay(message, action) {
     endMessage.textContent = message;
+    if (action) {
+      endActionBtn.hidden = false;
+      endActionBtn.textContent = action.label;
+      endActionBtn.onclick = action.onClick;
+    } else {
+      endActionBtn.hidden = true;
+      endActionBtn.onclick = null;
+    }
     endOverlay.hidden = false;
   }
 
   function hideEndOverlay() {
     endOverlay.hidden = true;
+  }
+
+  // ---- Onboarding: level-start banner + first-clear callout -------------------
+
+  var introBannerTimeoutId = null;
+
+  function showIntroBannerIfNeeded() {
+    clearTimeout(introBannerTimeoutId);
+    var text = currentLevel().introText;
+    if (!text) {
+      introBanner.hidden = true;
+      return;
+    }
+    introBannerText.textContent = text;
+    introBanner.classList.remove('fading');
+    introBanner.hidden = false;
+    introBannerTimeoutId = setTimeout(dismissIntroBanner, INTRO_BANNER_AUTO_DISMISS_MS);
+  }
+
+  function dismissIntroBanner() {
+    clearTimeout(introBannerTimeoutId);
+    if (introBanner.hidden) return;
+    introBanner.classList.add('fading');
+    setTimeout(function () { introBanner.hidden = true; }, 400);
+  }
+
+  // The first time the player ever clears a group, pause briefly to
+  // highlight the connected group and show a plain "10+ CLEAR!" callout
+  // before the normal clear animation runs. Every clear after that just
+  // animates normally -- this teaches the rule once, not every time.
+  function maybeEmphasizeFirstClear(groups, callback) {
+    if (hasShownFirstClearTutorial) {
+      callback();
+      return;
+    }
+    hasShownFirstClearTutorial = true;
+    groups.forEach(function (group) {
+      group.cells.forEach(function (c) {
+        var el = tokenElementAt(c.col, c.slot);
+        if (el) el.classList.add('emphasize');
+      });
+    });
+    clearCallout.hidden = false;
+    requestAnimationFrame(function () { clearCallout.classList.add('show'); });
+    delay(FIRST_CLEAR_EMPHASIS_MS).then(function () {
+      clearCallout.classList.remove('show');
+      delay(220).then(function () {
+        clearCallout.hidden = true;
+        callback();
+      });
+    });
   }
 
   // ---- Interaction ------------------------------------------------------------
@@ -394,6 +500,7 @@
   }
 
   function commitPlacement(pieceSlotIndex, cell) {
+    dismissIntroBanner();
     state.history.push(snapshotState(state));
 
     var piece = state.currentPieces[pieceSlotIndex];
@@ -408,21 +515,58 @@
     renderTopBar();
     renderControls();
 
-    runCascadeThenCheckEnd();
+    runGravityAndCascadeThenCheckEnd();
   }
 
   function markJustPlacedTokens(piece, cell) {
     var targets = Logic.getPieceTargetCells(piece, cell.col, cell.slot);
     targets.forEach(function (t) {
-      var el = boardSvg.querySelector('circle[data-col="' + t.col + '"][data-slot="' + t.slot + '"]');
+      var el = tokenElementAt(t.col, t.slot);
       if (el) el.classList.add('token-pop');
     });
   }
 
-  // Steps through Logic.resolveCascade's events one at a time so the
-  // player can see each clear happen, instead of jumping straight to the
-  // final settled board.
-  function runCascadeThenCheckEnd() {
+  // Animates tokens falling from their positions in `fromBoard` to their
+  // settled positions in `toBoard` by finding each moved token's existing
+  // circle element and transitioning its `cy`, rather than snapping
+  // straight to the final board -- this is what makes gravity visible
+  // instead of instant, for BOTH a fresh placement and any tokens a clear
+  // leaves dangling.
+  function animateFall(fromBoard, toBoard, callback) {
+    var moves = Logic.computeGravityMoves(fromBoard, toBoard);
+    if (moves.length === 0) {
+      callback();
+      return;
+    }
+    var pairs = moves.map(function (m) {
+      return { el: tokenElementAt(m.col, m.fromSlot), move: m };
+    });
+    pairs.forEach(function (pair) {
+      if (!pair.el) return;
+      pair.el.classList.add('falling');
+      pair.el.setAttribute('data-slot', pair.move.toSlot);
+    });
+    requestAnimationFrame(function () {
+      pairs.forEach(function (pair) {
+        if (!pair.el) return;
+        var target = cellPixels[Logic.cellKey(pair.move.col, pair.move.toSlot)];
+        pair.el.setAttribute('cy', target.y);
+      });
+    });
+    delay(FALL_ANIMATION_MS).then(callback);
+  }
+
+  // Drives the full post-placement sequence through Logic.resolveCascade's
+  // events, one at a time:
+  //   1. Gravity ALWAYS runs first, even if nothing clears (event with no
+  //      groups) -- this is what "newly placed tokens settle downward"
+  //      actually means, and it used to silently not happen at all.
+  //   2. Any qualifying groups are highlighted/faded, then gravity runs
+  //      again to resettle what's left, and so on until stable.
+  // Only once everything is stable does state.board get updated to the
+  // final result and the win/loss check run -- Undo relies on state.board
+  // never reflecting an in-between animation frame.
+  function runGravityAndCascadeThenCheckEnd() {
     var cascade = Logic.resolveCascade(state.board, Config.CLEAR_THRESHOLD);
     if (cascade.events.length === 0) {
       checkEndConditions();
@@ -430,33 +574,56 @@
     }
     isAnimating = true;
     renderControls();
+    playCascadeEvent(cascade.events, 0, cascade.board);
+  }
 
-    var stepIndex = 0;
-    function playNextEvent() {
-      if (stepIndex >= cascade.events.length) {
-        isAnimating = false;
-        state.board = cascade.board;
-        renderBoard();
-        renderControls();
-        checkEndConditions();
+  function playCascadeEvent(events, index, finalBoard) {
+    if (index >= events.length) {
+      isAnimating = false;
+      state.board = finalBoard;
+      renderBoard();
+      renderControls();
+      checkEndConditions();
+      return;
+    }
+
+    var event = events[index];
+    var isClearEvent = event.groups.length > 0;
+
+    function advance() {
+      playCascadeEvent(events, index + 1, finalBoard);
+    }
+
+    function fadeThenFall() {
+      if (!isClearEvent) {
+        // Pure gravity settle -- nothing to clear, just animate the fall.
+        animateFall(event.boardBeforeGravity, event.boardAfterGravity, function () {
+          state.board = event.boardAfterGravity;
+          advance();
+        });
         return;
       }
-      var event = cascade.events[stepIndex];
-      // Show the "about to clear" cells shrinking/fading.
       event.groups.forEach(function (group) {
         group.cells.forEach(function (c) {
-          var el = boardSvg.querySelector('circle[data-col="' + c.col + '"][data-slot="' + c.slot + '"]');
+          var el = tokenElementAt(c.col, c.slot);
           if (el) el.classList.add('clearing');
         });
       });
       delay(CLEAR_ANIMATION_MS).then(function () {
-        state.board = event.boardAfterGravity;
+        state.board = event.boardAfterClear;
         renderBoard();
-        stepIndex++;
-        playNextEvent();
+        animateFall(event.boardAfterClear, event.boardAfterGravity, function () {
+          state.board = event.boardAfterGravity;
+          advance();
+        });
       });
     }
-    playNextEvent();
+
+    if (isClearEvent) {
+      maybeEmphasizeFirstClear(event.groups, fadeThenFall);
+    } else {
+      fadeThenFall();
+    }
   }
 
   function checkEndConditions() {
@@ -490,7 +657,6 @@
 
   undoBtn.addEventListener('click', onUndo);
   restartBtn.addEventListener('click', resetGame);
-  endTryAgain.addEventListener('click', resetGame);
 
   resetGame();
 })();
