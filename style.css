@@ -117,27 +117,54 @@ body {
   opacity: 0.55;
 }
 
-.token {
+.hex-tile.debug-legal {
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+
+/* A piece is <g.piece-group> (position only, via CSS transform set from
+   JS) > <g.piece-visual> (pop-in scale only) > circles (active + buried).
+   Position and effects are kept on separate elements because SVG doesn't
+   compose a `transform` attribute with a CSS `transform` property on the
+   SAME element -- see the comment at the top of game.js. */
+
+.piece-group {
   cursor: pointer;
+}
+
+.piece-group.falling {
+  transition: transform 260ms cubic-bezier(0.4, 0, 0.8, 1);
+}
+
+.piece-visual {
   transform-box: fill-box;
   transform-origin: center;
 }
 
-.token.token-pop {
+.piece-visual.token-pop {
   animation: pop-in 180ms ease-out;
 }
 
-.token.clearing {
+.layer-circle {
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 0.35;
+}
+
+.layer-buried {
+  opacity: 0.9;
+}
+
+.layer-active.clearing {
+  transform-box: fill-box;
+  transform-origin: center;
   transition: transform 320ms ease-in, opacity 320ms ease-in;
   transform: scale(0.15);
   opacity: 0;
 }
 
-.token.falling {
-  transition: cy 260ms cubic-bezier(0.4, 0, 0.8, 1);
-}
-
-.token.emphasize {
+.layer-active.emphasize {
+  transform-box: fill-box;
+  transform-origin: center;
   animation: emphasize-pulse 480ms ease-in-out 2;
 }
 
@@ -152,10 +179,14 @@ body {
 }
 
 .debug-label {
-  font-size: 2.6px;
-  fill: var(--ink-soft);
+  font-size: 2.4px;
+  fill: #1a1a1a;
+  stroke: #ffffff;
+  stroke-width: 0.5px;
+  paint-order: stroke;
   pointer-events: none;
   text-anchor: middle;
+  font-weight: 700;
 }
 
 /* ---------- Onboarding: intro banner + first-clear callout ---------- */

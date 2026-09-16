@@ -1,44 +1,57 @@
-# ClearTen (prototype v0.2)
+# ClearTen (prototype v0.4)
 
 A browser-based prototype of a mobile strategy puzzle game. The goal of
 this build is **only** to test whether the core mechanic is fun -- it is
 not a finished product. No accounts, ads, sound, procedural levels, or
-anything beyond the two hand-authored puzzles.
+anything beyond the one hand-authored puzzle.
+
+**V0.4 replaces the piece model entirely.** Earlier versions used flat
+multi-cell geometric pieces (a shape spanning 1-3 hexes) -- playtesting
+found that felt too much like untimed Tetris. V0.4 tests a different idea:
+every piece is a single hex cell holding a small stack of 2-4 color
+layers, one on top of the other. Only the top (active) layer counts
+toward clearing; clearing it reveals the color underneath. The question
+this version exists to answer: **does planning around a piece's buried
+colors -- not just what it does right now -- create real strategic
+depth?**
 
 ## HOW TO PLAY
 
-- The board is a hex grid with an irregular (hexagon-shaped) outline. Each
-  filled hex holds one colored token: **red**, **purple**, or **orange**.
+- The board is a hex grid with an irregular (hexagon-shaped) outline.
+- Every piece occupies **one hex cell** and holds **2-4 stacked colors**
+  (red, purple, or orange -- the same three colors throughout). The
+  topmost color is **active**; the rest are buried underneath, visible
+  as smaller offset circles peeking out behind the active one.
 - At the bottom of the screen you have **3 Current pieces** you can play
-  right now, and **2 Upcoming pieces** you can see but not play yet. The
-  whole sequence of pieces for this puzzle is fixed ahead of time (not
-  random), so what you see is genuinely useful information for planning.
-- **Tap a current piece** to select it (it highlights). **Tap a spot on the
-  board** to place it there. While a piece is selected, hovering/tapping
-  the board shows a green preview if the placement is legal, or red if it
-  isn't (out of bounds, or overlapping an existing token).
-- When you use a piece, the next piece in the sequence slides into that
-  slot, and a new one appears in the Upcoming preview.
-- **Gravity**: after every placement, every token that can fall does --
-  straight down, within its own column, animated so you can actually see
-  it happen. Columns never affect each other -- if you place something in
-  one column, nothing shifts in the column next to it.
-- **Clearing**: whenever 10 or more tokens of the *same color* are
-  connected (through any of a hex's 6 neighbors), that whole group clears
-  at once. If clearing exposes another qualifying group after gravity
-  resettles the board, that clears too, and so on (a cascade). The first
-  time this ever happens, the game pauses briefly to highlight the group
-  and show "10+ CLEAR!" so the rule is obvious -- after that, clears just
-  animate normally.
-- **You win a level only when its board is entirely empty.** There's no
-  score, no target percentage, nothing else. Clear Level 1 and a "Next
-  Level" button takes you to Level 2; clear Level 2 and you've finished
-  the prototype.
-- **You lose** if tokens remain on the board and either no piece you're
-  currently holding can legally be placed anywhere, or you run out of
-  pieces entirely.
+  right now, and **2 Upcoming pieces** you can see but not play yet, each
+  showing its *complete* layer stack. The whole sequence is fixed ahead
+  of time (not random), so what you see is genuinely useful for planning.
+- **Tap a current piece** to select it, then **tap any empty board cell**
+  to place it there -- there's no shape to fit; any piece fits any open
+  cell. Hovering/tapping shows a green preview if the cell is open, red if
+  it's already occupied.
+- **Gravity**: after every placement, every piece that can fall does --
+  straight down, within its own column, as one indivisible unit (its
+  buried layers never separate from it). Columns never affect each other.
+- **Clearing**: whenever 10 or more pieces with the *same active color*
+  are connected (through any of a hex's 6 neighbors), that whole group's
+  **top layer only** clears. Whatever was the second layer becomes active
+  and stays right there on the board -- the piece isn't removed unless
+  that was its last layer. If peeling a layer reveals a color that's now
+  part of *another* 10+ connected group, that clears too, and so on (a
+  cascade) -- clearing one color can reveal and immediately clear another.
+  The first time this ever happens, the game pauses briefly to highlight
+  the group and show "10+ CLEAR!" so the rule is obvious -- after that,
+  clears just animate normally.
+- **You win only when every board cell is empty** -- meaning every layer
+  of every piece has been cleared, buried colors included. There's no
+  score, no target percentage, nothing else.
+- **You lose** if board cells remain occupied and either no piece you're
+  holding can legally be placed (the board is completely full), or you
+  run out of pieces entirely.
 - **Undo** steps back through your whole move history, one move at a
-  time. **Restart** resets the *current* level to its starting position.
+  time, restoring the complete layered state (not just the active
+  colors). **Restart** resets the puzzle to its starting position.
 
 ## HOW TO RUN IT
 
@@ -63,88 +76,88 @@ Then open `http://localhost:8000` in your browser.
 
 - `index.html` -- page structure.
 - `style.css` -- all visual styling.
-- `gamelogic.js` -- the pure game engine (hex grid, adjacency, piece
-  placement, gravity, clearing, cascades). No UI code, no rendering. Runs
+- `gamelogic.js` -- the pure game engine (hex grid, adjacency, layered
+  pieces, gravity, clearing, cascades). No UI code, no rendering. Runs
   identically in the browser and in Node, which is what makes it testable.
-- `config.js` -- everything that defines the puzzles: colors, the clear
-  threshold, and a `LEVELS` array where each level has its own board
-  shape, starting tokens, and predetermined piece sequence (plus a
-  documented, verified solution). Tweak numbers here to experiment with
-  the rules, or add a `LEVELS[2]` to try a third level.
-- `game.js` -- the browser UI: rendering, input handling, undo/restart,
-  win/loss detection, animation timing.
+  See the file header for the full layered-cell data model.
+- `config.js` -- everything that defines the puzzle: colors, the clear
+  threshold, and a `LEVELS` array (one level in this version) with its
+  board shape, starting pieces, and predetermined piece sequence, plus a
+  documented, verified solution. Tweak numbers here to experiment.
+- `game.js` -- the browser UI: layered-token rendering, input handling,
+  undo/restart, win/loss detection, animation timing.
 - `tests.js` -- automated tests for `gamelogic.js`, runnable with
   `node tests.js` (no test framework, no npm install required).
 
 ## DEVELOPER NOTES
 
-- **Coordinate system**: the board uses flat-top hexagons stored as
-  `(col, slot)` offset coordinates (`slot` 0 = bottom of that column).
-  Piece shapes are defined in axial coordinates internally so they're
-  translation-invariant. All of this is explained in comments at the top
-  of `gamelogic.js`.
-- **Gravity** is strictly per-column (tokens fall straight down, columns
-  never interact) -- chosen deliberately for predictability over a more
-  "realistic" but confusing all-directions hex gravity.
-- **Debug mode**: set `DEBUG = true` near the top of `game.js` to show
-  `(col, slot)` coordinate labels on every board hex. Not shown to normal
-  players.
+- **The layered data model**: a board cell is either `null` (empty) or
+  `{ layers: [color, ...] }`, `layers[0]` being active. Every function
+  that changes a cell replaces it with a brand-new object rather than
+  mutating it in place, which is what lets Undo work with a cheap shallow
+  clone instead of a deep one -- see the `gamelogic.js` file header.
+- **Clearing only ever peels one layer**: `clearGroups` removes just
+  `layers[0]` from each cell in a qualifying group; a cell becomes `null`
+  only once its layer array is empty. It returns a `revealed` list (what's
+  now on top of each affected cell, or `null` if the piece is gone) that
+  the UI uses to show "I cleared red, and purple was underneath."
+- **Gravity moves a whole piece as one unit** by relocating its entire
+  `{layers}` object between slots -- there's no per-layer movement, so
+  buried colors can never separate from their piece while falling.
+- **A real SVG gotcha worth knowing about**: pieces render as nested
+  `<g>` elements (an outer group for position, an inner one for pop-in/
+  peel effects). Setting `el.style.transform = 'translate(x,y)'` on an SVG
+  element silently does nothing without an explicit unit -- `px` is
+  required, and on an SVG element it resolves to one local coordinate-
+  system unit, not a screen pixel. This was caught by an actual browser
+  test run, not by the Node test suite (which has no DOM), which is why
+  a scripted Playwright pass matters as much as `node tests.js` does here.
+- **Debug mode**: set `DEBUG = true` near the top of `game.js` to show,
+  per cell, its `(col, slot)`, full layer sequence, and connected-group
+  size, plus every legal placement cell for the selected piece and the
+  queue position in the title bar. Not shown to normal players.
 - **The level is hand-authored, not procedural**, and was built backward
-  from a solved (empty) state. The full worked solution -- which piece
-  goes where, in what order, and why -- is documented as `SOLUTION` in
-  `config.js`, and `tests.js` replays it through the real engine to prove
-  the puzzle is actually solvable (not just "probably fine").
-- One non-obvious design fix worth knowing about: the win condition
-  ("board completely empty") is checked after *every* move, and Level 1
-  is built around clearing color groups in waves. Early on, a wave
-  clearing perfectly could leave the board *entirely* empty before all the
-  pieces were used -- which the game would (correctly, per the rules)
-  immediately score as a win, well before the puzzle was meant to end.
-  The fix was adding a single "seed" token (`S1` in the sequence) that
-  sits untouched in an unused column between waves, so the board always
-  has something on it until the final piece. `tests.js` has a regression
-  test guarding against this specific failure mode.
-- **v0.2 gravity fix**: `gamelogic.js`'s `resolveCascade` used to only call
-  `applyGravity` *inside* the "a group qualifies" loop -- so any placement
-  that didn't immediately trigger a clear left its tokens exactly where
-  they were clicked, never settling. Gravity now always runs once right
-  after a placement, clear-or-not, and `computeGravityMoves()` lets the UI
-  animate exactly which tokens fell and how far, rather than snapping the
-  board to its settled state. `tests.js` has regression tests for both.
-- **Level 2's design goal isn't "harder," it's answering a specific
-  question**: does predictable, per-column gravity actually create
-  interesting planning? The long comment above `level2` in `config.js`
-  walks through why (per-column, immediate-settle gravity can only create
-  a *brand new* connection through a clear-triggered cascade, not simple
-  stacking) and documents the verified 12-move solution in full, including
-  the deliberate "obvious empty cell, wrong to use it" trap.
+  from a solved (empty) state using a Node sandbox to verify each wave
+  against the real engine before committing to it. The full worked
+  solution, and the reasoning behind why THIS mechanic specifically needs
+  a clear-triggered cascade (not just stacking) to create a genuine "new
+  connection" moment, is documented at length above the level definition
+  in `config.js`. `tests.js` replays the solution through the real engine
+  and separately proves the level's headline mechanic: peeling red
+  reveals purple, which reaches 10 and clears, which reveals orange that
+  was *already* connected to more orange revealed earlier -- clearing the
+  entire board without one further placement.
+- **The "buried color, not just active color" decision**: during the
+  level's first wave, every empty cell in the growing red group looks
+  equally good in the moment (they're all red, and red is all wave 1
+  needs). Which cell you put a given piece into is what actually
+  determines whether the automatic reveal-and-cascade chain works cleanly
+  afterward or leaves a scattered mess to clean up by hand. `tests.js` has
+  a test that swaps two pieces' target cells, confirms wave 1 still
+  clears red either way, and shows the resulting board genuinely differs
+  -- proving the buried color is what the placement choice affects, not
+  the (identical either way) active one.
 
 ## WHAT TO TEST
 
-Play through both levels a few times (use Restart freely) and pay
-attention to:
+Play through it a few times (use Restart freely) and pay attention to:
 
-- Did placing pieces require actual thought, or did it feel automatic?
-- Could you reasonably predict what gravity would do before you placed a
-  piece? Could you actually *see* it happen now?
-- Did the 3 current + 2 upcoming pieces give you enough information to
-  plan ahead, or did you want to see more/less?
-- Did groups of 10 feel like the right size to aim for -- too easy, too
-  hard, or about right?
-- Did clearing the whole board feel satisfying? Did the first-time "10+
-  CLEAR!" explanation make the rule clear without getting in the way on
-  later clears?
-- When you lost, did it feel like your mistake, or like the game's fault?
-- Did the board ever feel too crowded or cramped?
-- **Level 2 specifically**: did you notice the two separated red tokens at
-  the start? Did watching one drop and connect to the other (after a
-  *different* color's group cleared) feel like a genuine "aha," or was it
-  confusing? Did you get tempted to place an upcoming piece into open
-  middle-column space before you needed to -- and if you did, what
-  happened?
-- Did you wish you could see further ahead in the piece queue?
-- Did you find yourself discovering strategies naturally as you played?
+- Am I thinking about the buried colors, or only reacting to the active one?
+- Do I place pieces differently because of what's underneath?
+- Can I mentally plan 2-3 clears ahead?
+- Does gravity make the future colors more interesting, now that a whole
+  layered piece visibly falls and settles?
+- Are the visible layer indicators (the offset circles) easy to read at a
+  glance, on the board and in the piece queue?
+- Does the game still feel like Tetris, or does the single-cell placement
+  (no shape to fit) change that?
+- Do cascades feel earned and understandable -- can you actually follow
+  "that cleared, which revealed this, which then also cleared"?
+- Does a bad placement create consequences you can recognize?
+- Does clearing the entire board feel more satisfying now?
+- Do you wish you could see more future information (deeper queue, more
+  layers shown), or is what's visible now enough?
 
 If you get stuck, Undo is there to help you rethink recent moves, and the
-full solution for both levels is documented in `config.js` if you want to
-compare your approach to a known-working one.
+full solution is documented in `config.js` if you want to compare your
+approach to a known-working one.

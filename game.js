@@ -5,6 +5,25 @@
  * gamelogic.js, and all level/rule numbers live in config.js. This file
  * just renders state to SVG/DOM and turns pointer input into calls into
  * the engine.
+ *
+ * LAYERED TOKEN RENDERING (V0.4)
+ * -------------------------------
+ * A piece is drawn as one hex cell's worth of nested SVG groups:
+ *
+ *   <g class="piece-group" data-col data-slot>       -- position only
+ *     <g class="piece-visual">                        -- pop-in scale only
+ *       <circle class="layer-buried">  (deepest first, most offset)
+ *       <circle class="layer-buried">  (closer, less offset)
+ *       <circle class="layer-active">  (centered, full size, on top)
+ *
+ * Position (piece-group) and effects (piece-visual's pop-in, or a
+ * layer-active circle's own clearing/emphasize animation) are kept on
+ * SEPARATE elements on purpose: SVG elements can carry a `transform`
+ * PRESENTATION ATTRIBUTE and a CSS `transform` PROPERTY, but browsers
+ * don't compose them -- the CSS property wins outright and the attribute
+ * is ignored. Using CSS `transform` consistently, on different elements
+ * for position vs. effects, avoids that trap entirely (ordinary nested
+ * CSS transforms DO compose correctly).
  */
 
 (function () {
@@ -13,12 +32,13 @@
   var Logic = window.ClearTenLogic;
   var Config = window.ClearTenConfig;
 
-  // Flip this to true to see hex coordinates on the board and extra info
-  // in the console. Not exposed to normal players.
+  // Flip this to true to see hex coordinates, active color, full layer
+  // sequence, connected-group size, queue index, and legal placement
+  // cells. Not exposed to normal players.
   var DEBUG = false;
 
   var CLEAR_ANIMATION_MS = 320;
-  var FALL_ANIMATION_MS = 280; // matches the .token.falling CSS transition + a small buffer
+  var FALL_ANIMATION_MS = 280; // matches the .piece-group.falling CSS transition + a small buffer
   var FIRST_CLEAR_EMPHASIS_MS = 1100;
   var INTRO_BANNER_AUTO_DISMISS_MS = 4200;
 
@@ -41,6 +61,15 @@
     return axialToPixel(axial.q, axial.r);
   }
 
+  // CSS `transform` on an SVG element requires an explicit length unit --
+  // a unitless `translate(x,y)` is silently ignored by the browser. `px`
+  // here does NOT mean a screen pixel; on an SVG element it resolves to
+  // one unit of that element's local coordinate system, which is exactly
+  // the SVG user-space units the rest of this file computes in.
+  function translatePx(x, y) {
+    return 'translate(' + x + 'px,' + y + 'px)';
+  }
+
   function hexCorners(cx, cy, size) {
     var points = [];
     for (var i = 0; i < 6; i++) {
@@ -49,6 +78,46 @@
       points.push((cx + size * Math.cos(angleRad)).toFixed(2) + ',' + (cy + size * Math.sin(angleRad)).toFixed(2));
     }
     return points.join(' ');
+  }
+
+  // A layered piece's visual is a small stack of circles: the active
+  // (top) layer full-size and centered, each buried layer beneath it
+  // smaller and progressively offset along one diagonal -- deepest layer
+  // drawn first (most offset, most hidden), active layer drawn last
+  // (centered, on top of everything). The layer nearest the surface sits
+  // right next to the active circle, reading naturally as "what's next."
+  var LAYER_MAIN_RADIUS = HEX_SIZE * 0.68;
+  var LAYER_BURIED_RADIUS = HEX_SIZE * 0.5;
+  var LAYER_OFFSET_STEP = HEX_SIZE * 0.3;
+
+  function layerCircleSpecs(layers) {
+    var specs = [];
+    for (var i = layers.length - 1; i >= 1; i--) {
+      var off = i * LAYER_OFFSET_STEP;
+      specs.push({ cx: off, cy: off, r: LAYER_BURIED_RADIUS, color: layers[i], active: false, layerIndex: i });
+    }
+    specs.push({ cx: 0, cy: 0, r: LAYER_MAIN_RADIUS, color: layers[0], active: true, layerIndex: 0 });
+    return specs;
+  }
+
+  // The reusable visual: buried circles behind, active circle on top,
+  // all positioned relative to local (0,0). Used identically for board
+  // pieces (wrapped in a positioned outer group) and queue previews
+  // (dropped straight into a small dedicated SVG), so the player learns
+  // one visual language for "what's in this piece" everywhere it appears.
+  function buildPieceVisual(layers) {
+    var g = svgEl('g', { class: 'piece-visual' });
+    layerCircleSpecs(layers).forEach(function (spec) {
+      g.appendChild(svgEl('circle', {
+        cx: spec.cx,
+        cy: spec.cy,
+        r: spec.r,
+        fill: Config.COLORS[spec.color].hex,
+        class: 'layer-circle ' + (spec.active ? 'layer-active' : 'layer-buried'),
+        'data-layer-index': spec.layerIndex
+      }));
+    });
+    return g;
   }
 
   // Pixel centers for the CURRENT level's cells and the SVG viewBox that
@@ -105,20 +174,22 @@
   // ---- Level / game state -------------------------------------------------------
   // `state.board` and `state.pieceIndex`/`moveCount`/`status` together make
   // up everything Undo/Restart need to restore. `history` is a stack of
-  // previous snapshots (deep-ish clones), pushed right before each
-  // committed placement, so Undo can pop back any number of moves.
+  // previous snapshots pushed right before each committed placement, so
+  // Undo can pop back any number of moves. Because gamelogic.js always
+  // replaces a cell's `{layers}` object wholesale rather than mutating it
+  // in place, Logic.cloneBoard's shallow copy already gives each snapshot
+  // an independent, fully-correct layered board -- no separate deep-clone
+  // step is needed here.
   //
   // `currentLevelIndex` lives outside `state` on purpose: it's "which
   // puzzle are we playing," not part of a single level's move history.
-  // Restart replays the same level; only advancing to the next level (after
-  // a win) changes it.
 
   var currentLevelIndex = 0;
   var state = null;
 
   // Whether the player has ever seen the "10+ CLEAR!" first-clear teaching
-  // moment this session. Intentionally NOT reset by Restart or by moving to
-  // a new level -- once the rule has been explained, it stays explained.
+  // moment this session. Intentionally NOT reset by Restart -- once the
+  // rule has been explained, it stays explained.
   var hasShownFirstClearTutorial = false;
 
   function currentLevel() {
@@ -223,45 +294,72 @@
     tileElements = {};
     previewedKeys = [];
 
-    // Tiles (background hexes), drawn first so tokens sit on top.
+    var legalDebugCells = debugLegalCellKeys();
+
+    // Tiles (background hexes), drawn first so pieces sit on top.
     Object.keys(cellPixels).forEach(function (key) {
       var cell = cellPixels[key];
+      var tileClass = 'hex-tile';
+      if (legalDebugCells[key]) tileClass += ' debug-legal';
       var hex = svgEl('polygon', {
         points: hexCorners(cell.x, cell.y, HEX_SIZE),
-        class: 'hex-tile',
+        class: tileClass,
         'data-col': cell.col,
         'data-slot': cell.slot
       });
       boardSvg.appendChild(hex);
       tileElements[key] = hex;
-
-      if (DEBUG) {
-        var label = svgEl('text', {
-          x: cell.x,
-          y: cell.y + 1,
-          class: 'debug-label'
-        });
-        label.textContent = cell.col + ',' + cell.slot;
-        boardSvg.appendChild(label);
-      }
     });
 
-    // Tokens.
+    // Pieces.
     Object.keys(cellPixels).forEach(function (key) {
       var cell = cellPixels[key];
-      var color = Logic.getColor(state.board, cell.col, cell.slot);
-      if (color === null) return;
-      var circle = svgEl('circle', {
-        cx: cell.x,
-        cy: cell.y,
-        r: HEX_SIZE * 0.68,
-        fill: Config.COLORS[color].hex,
-        class: 'token',
-        'data-col': cell.col,
-        'data-slot': cell.slot
-      });
-      boardSvg.appendChild(circle);
+      var layers = Logic.getLayers(state.board, cell.col, cell.slot);
+      if (!layers) return;
+      var group = svgEl('g', { class: 'piece-group', 'data-col': cell.col, 'data-slot': cell.slot });
+      group.style.transform = translatePx(cell.x, cell.y);
+      group.appendChild(buildPieceVisual(layers));
+      boardSvg.appendChild(group);
     });
+
+    // Debug labels last, on top of everything, so they stay legible even
+    // over an occupied cell's piece visual.
+    if (DEBUG) {
+      Object.keys(cellPixels).forEach(function (key) {
+        boardSvg.appendChild(buildDebugLabel(cellPixels[key]));
+      });
+    }
+  }
+
+  function buildDebugLabel(cell) {
+    var layers = Logic.getLayers(state.board, cell.col, cell.slot);
+    var lines = [cell.col + ',' + cell.slot];
+    if (layers) {
+      lines.push(layers.map(function (c) { return c.slice(0, 1).toUpperCase(); }).join(''));
+      var groupSize = Logic.findConnectedGroup(state.board, cell.col, cell.slot).length;
+      lines.push('g' + groupSize);
+    }
+    var text = svgEl('text', { x: cell.x, y: cell.y - HEX_SIZE * 0.15, class: 'debug-label' });
+    lines.forEach(function (line, i) {
+      var tspan = svgEl('tspan', { x: cell.x, dy: i === 0 ? 0 : 2.4 });
+      tspan.textContent = line;
+      text.appendChild(tspan);
+    });
+    return text;
+  }
+
+  // When DEBUG is on and a piece is selected, every empty cell is legal
+  // for a single-cell piece -- returns the set so renderBoard can mark
+  // them, distinct from the hover preview.
+  function debugLegalCellKeys() {
+    var keys = {};
+    if (!DEBUG || selectedPieceSlot === null || !state || !state.currentPieces[selectedPieceSlot]) return keys;
+    var piece = state.currentPieces[selectedPieceSlot];
+    Object.keys(cellPixels).forEach(function (key) {
+      var cell = cellPixels[key];
+      if (Logic.canPlacePiece(state.board, piece, cell.col, cell.slot)) keys[key] = true;
+    });
+    return keys;
   }
 
   // Lightweight update: only toggles preview-valid/preview-invalid classes
@@ -286,35 +384,32 @@
     });
   }
 
-  function tokenElementAt(col, slot) {
-    return boardSvg.querySelector('circle[data-col="' + col + '"][data-slot="' + slot + '"]');
+  function pieceGroupAt(col, slot) {
+    return boardSvg.querySelector('g.piece-group[data-col="' + col + '"][data-slot="' + slot + '"]');
+  }
+
+  function activeCircleAt(col, slot) {
+    var group = pieceGroupAt(col, slot);
+    return group ? group.querySelector('.layer-active') : null;
   }
 
   // ---- Rendering: piece previews (bottom bar) --------------------------------
 
-  function renderPieceShape(piece) {
-    // A small self-contained SVG diagram of a piece's shape, reusing the
-    // same hex math as the board so shapes look consistent.
-    if (!piece) {
-      var empty = svgEl('svg');
-      return empty;
-    }
-    var pts = piece.cells.map(function (c) { return axialToPixel(c.dq, c.dr); });
-    var minX = Math.min.apply(null, pts.map(function (p) { return p.x - HEX_SIZE; }));
-    var maxX = Math.max.apply(null, pts.map(function (p) { return p.x + HEX_SIZE; }));
-    var minY = Math.min.apply(null, pts.map(function (p) { return p.y - HEX_SIZE; }));
-    var maxY = Math.max.apply(null, pts.map(function (p) { return p.y + HEX_SIZE; }));
-    var pad = HEX_SIZE * 0.5;
+  function renderPiecePreview(piece) {
+    // A small self-contained SVG diagram of a piece's full layer stack,
+    // reusing the exact same visual as the board so the player learns one
+    // language for "what's in this piece" everywhere it appears.
+    if (!piece) return svgEl('svg');
+    var specs = layerCircleSpecs(piece.layers);
+    var minX = Math.min.apply(null, specs.map(function (s) { return s.cx - s.r; }));
+    var maxX = Math.max.apply(null, specs.map(function (s) { return s.cx + s.r; }));
+    var minY = Math.min.apply(null, specs.map(function (s) { return s.cy - s.r; }));
+    var maxY = Math.max.apply(null, specs.map(function (s) { return s.cy + s.r; }));
+    var pad = HEX_SIZE * 0.35;
     var svg = svgEl('svg', {
       viewBox: (minX - pad) + ' ' + (minY - pad) + ' ' + (maxX - minX + pad * 2) + ' ' + (maxY - minY + pad * 2)
     });
-    piece.cells.forEach(function (c, i) {
-      var p = pts[i];
-      svg.appendChild(svgEl('circle', {
-        cx: p.x, cy: p.y, r: HEX_SIZE * 0.68,
-        fill: Config.COLORS[c.color].hex
-      }));
-    });
+    svg.appendChild(buildPieceVisual(piece.layers));
     return svg;
   }
 
@@ -325,7 +420,7 @@
       slot.className = 'piece-slot' + (piece ? '' : ' empty') + (selectedPieceSlot === i ? ' selected' : '');
       if (piece) {
         slot.setAttribute('data-piece-id', piece.id);
-        slot.appendChild(renderPieceShape(piece));
+        slot.appendChild(renderPiecePreview(piece));
         slot.addEventListener('click', function () { onSelectPiece(i); });
       }
       currentPiecesEl.appendChild(slot);
@@ -339,7 +434,7 @@
       slot.className = 'piece-slot' + (piece ? '' : ' empty');
       if (piece) {
         slot.setAttribute('data-piece-id', piece.id);
-        slot.appendChild(renderPieceShape(piece));
+        slot.appendChild(renderPiecePreview(piece));
       }
       upcomingPiecesEl.appendChild(slot);
     }
@@ -348,6 +443,9 @@
   function renderTopBar() {
     moveCountEl.textContent = state.moveCount;
     levelNameEl.textContent = currentLevel().name;
+    if (DEBUG) {
+      levelNameEl.textContent += ' (queue: ' + state.pieceIndex + '/' + currentLevel().pieceSequence.length + ')';
+    }
   }
 
   function renderControls() {
@@ -412,9 +510,10 @@
   }
 
   // The first time the player ever clears a group, pause briefly to
-  // highlight the connected group and show a plain "10+ CLEAR!" callout
-  // before the normal clear animation runs. Every clear after that just
-  // animates normally -- this teaches the rule once, not every time.
+  // highlight the connected group's active layer and show a plain "10+
+  // CLEAR!" callout before the normal clear animation runs. Every clear
+  // after that just animates normally -- this teaches the rule once, not
+  // every time.
   function maybeEmphasizeFirstClear(groups, callback) {
     if (hasShownFirstClearTutorial) {
       callback();
@@ -423,7 +522,7 @@
     hasShownFirstClearTutorial = true;
     groups.forEach(function (group) {
       group.cells.forEach(function (c) {
-        var el = tokenElementAt(c.col, c.slot);
+        var el = activeCircleAt(c.col, c.slot);
         if (el) el.classList.add('emphasize');
       });
     });
@@ -446,20 +545,22 @@
     selectedPieceSlot = selectedPieceSlot === index ? null : index;
     renderPieces();
     setPreview(null);
+    if (DEBUG) renderBoard(); // refresh the debug "legal cells" overlay
   }
 
   function cellFromPointerEvent(evt) {
-    var target = evt.target;
-    if (!target || !target.hasAttribute('data-col')) return null;
+    var target = evt.target.closest ? evt.target.closest('[data-col]') : null;
+    if (!target) return null;
     return { col: Number(target.getAttribute('data-col')), slot: Number(target.getAttribute('data-slot')) };
   }
 
+  // A layered piece occupies exactly one cell -- the preview is just that
+  // single cell, unlike the old multi-cell geometric pieces.
   function currentPreviewFor(cell) {
     if (selectedPieceSlot === null || !state.currentPieces[selectedPieceSlot]) return null;
     var piece = state.currentPieces[selectedPieceSlot];
-    var targets = Logic.getPieceTargetCells(piece, cell.col, cell.slot);
     var valid = Logic.canPlacePiece(state.board, piece, cell.col, cell.slot);
-    return { cells: targets, valid: valid };
+    return { cells: [cell], valid: valid };
   }
 
   boardSvg.addEventListener('pointermove', function (evt) {
@@ -491,9 +592,10 @@
     var piece = state.currentPieces[pieceSlotIndex];
     if (!piece) return;
     if (!Logic.canPlacePiece(state.board, piece, cell.col, cell.slot)) {
-      // Invalid placement: leave the red preview showing briefly, keep the
-      // piece selected so the player can just try another cell.
-      setPreview({ cells: Logic.getPieceTargetCells(piece, cell.col, cell.slot), valid: false });
+      // Invalid placement (cell already occupied): leave the red preview
+      // showing briefly, keep the piece selected so the player can just
+      // try another cell.
+      setPreview({ cells: [cell], valid: false });
       return;
     }
     commitPlacement(pieceSlotIndex, cell);
@@ -510,7 +612,7 @@
     selectedPieceSlot = null;
 
     renderBoard();
-    markJustPlacedTokens(piece, cell);
+    markJustPlaced(cell);
     renderPieces();
     renderTopBar();
     renderControls();
@@ -518,20 +620,21 @@
     runGravityAndCascadeThenCheckEnd();
   }
 
-  function markJustPlacedTokens(piece, cell) {
-    var targets = Logic.getPieceTargetCells(piece, cell.col, cell.slot);
-    targets.forEach(function (t) {
-      var el = tokenElementAt(t.col, t.slot);
-      if (el) el.classList.add('token-pop');
-    });
+  function markJustPlaced(cell) {
+    var group = pieceGroupAt(cell.col, cell.slot);
+    if (group) {
+      var visual = group.querySelector('.piece-visual');
+      if (visual) visual.classList.add('token-pop');
+    }
   }
 
-  // Animates tokens falling from their positions in `fromBoard` to their
-  // settled positions in `toBoard` by finding each moved token's existing
-  // circle element and transitioning its `cy`, rather than snapping
-  // straight to the final board -- this is what makes gravity visible
-  // instead of instant, for BOTH a fresh placement and any tokens a clear
-  // leaves dangling.
+  // Animates pieces falling from their positions in `fromBoard` to their
+  // settled positions in `toBoard` by finding each moved piece's existing
+  // group element and transitioning its CSS transform, rather than
+  // snapping straight to the final board -- this is what makes gravity
+  // visible instead of instant. A layered piece's whole group (every
+  // layer) moves together in one transform change, so buried colors can
+  // never visually separate from their piece while falling.
   function animateFall(fromBoard, toBoard, callback) {
     var moves = Logic.computeGravityMoves(fromBoard, toBoard);
     if (moves.length === 0) {
@@ -539,7 +642,7 @@
       return;
     }
     var pairs = moves.map(function (m) {
-      return { el: tokenElementAt(m.col, m.fromSlot), move: m };
+      return { el: pieceGroupAt(m.col, m.fromSlot), move: m };
     });
     pairs.forEach(function (pair) {
       if (!pair.el) return;
@@ -550,7 +653,7 @@
       pairs.forEach(function (pair) {
         if (!pair.el) return;
         var target = cellPixels[Logic.cellKey(pair.move.col, pair.move.toSlot)];
-        pair.el.setAttribute('cy', target.y);
+        pair.el.style.transform = translatePx(target.x, target.y);
       });
     });
     delay(FALL_ANIMATION_MS).then(callback);
@@ -559,10 +662,12 @@
   // Drives the full post-placement sequence through Logic.resolveCascade's
   // events, one at a time:
   //   1. Gravity ALWAYS runs first, even if nothing clears (event with no
-  //      groups) -- this is what "newly placed tokens settle downward"
-  //      actually means, and it used to silently not happen at all.
-  //   2. Any qualifying groups are highlighted/faded, then gravity runs
-  //      again to resettle what's left, and so on until stable.
+  //      groups) -- newly placed pieces and any pieces a previous change
+  //      left dangling settle downward as a single visible step.
+  //   2. Any qualifying groups have their ACTIVE layer highlighted/faded
+  //      (this is the "peel," not a full removal), the board re-renders to
+  //      show whatever's now on top (or nothing, if that was the piece's
+  //      last layer), then gravity runs again, and so on until stable.
   // Only once everything is stable does state.board get updated to the
   // final result and the win/loss check run -- Undo relies on state.board
   // never reflecting an in-between animation frame.
@@ -596,16 +701,21 @@
 
     function fadeThenFall() {
       if (!isClearEvent) {
-        // Pure gravity settle -- nothing to clear, just animate the fall.
+        // Pure gravity settle -- nothing to peel, just animate the fall.
         animateFall(event.boardBeforeGravity, event.boardAfterGravity, function () {
           state.board = event.boardAfterGravity;
           advance();
         });
         return;
       }
+      // Peel: shrink/fade only the ACTIVE circle of each cleared cell (the
+      // buried layers underneath are already rendered and simply become
+      // visible once the board re-renders to boardAfterClear below) --
+      // this is what lets the player see "I cleared pink, and purple was
+      // underneath" instead of the whole piece vanishing.
       event.groups.forEach(function (group) {
         group.cells.forEach(function (c) {
-          var el = tokenElementAt(c.col, c.slot);
+          var el = activeCircleAt(c.col, c.slot);
           if (el) el.classList.add('clearing');
         });
       });
@@ -639,7 +749,7 @@
       return;
     }
     if (DEBUG) {
-      console.log('[debug] queue position:', state.pieceIndex, 'legal move exists:', true);
+      console.log('[debug] queue position:', state.pieceIndex, 'legal move exists: true');
     }
   }
 
