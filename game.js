@@ -34,7 +34,9 @@
 
   // Flip this to true to see hex coordinates, active color, full layer
   // sequence, connected-group size, queue index, and legal placement
-  // cells. Not exposed to normal players.
+  // cells -- and (V0.7) to reveal the Undo button, which normal play no
+  // longer shows: a meaningful mistake should cost a Restart, not a free
+  // rewind. Not exposed to normal players.
   var DEBUG = false;
 
   var CLEAR_ANIMATION_MS = 320;
@@ -478,6 +480,11 @@
   }
 
   function renderControls() {
+    // V0.7: Undo is removed from normal play (a meaningful mistake should
+    // cost a Restart) but the underlying history/onUndo mechanism is kept
+    // fully intact for debugging -- the button just stays hidden unless
+    // DEBUG is on.
+    undoBtn.hidden = !DEBUG;
     undoBtn.disabled = state.history.length === 0 || isAnimating;
     restartBtn.disabled = isAnimating;
   }

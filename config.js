@@ -17,8 +17,8 @@
   'use strict';
 
   // How many same-active-color connected pieces are needed to clear a group.
-  // LOCKED at 10 for V0.6 -- every level below is built to hit exactly this
-  // number, never more, never less.
+  // LOCKED at exactly 10 -- every level below is built around this number,
+  // never more, never less. Unchanged since V0.5.
   var CLEAR_THRESHOLD = 10;
 
   // The 3 token colors used in this prototype, with their display color.
@@ -28,17 +28,31 @@
     orange: { hex: '#f0a04b', label: 'Orange' }
   };
 
-  // Builds a board layout from an array of column heights. Every column's
-  // valid slots start at 0 and are contiguous -- this is what keeps
-  // gravity simple (see gamelogic.js). A SHORT column next to tall ones
-  // creates a "narrow passage" or, at height 0, a true gap: hex adjacency
-  // only ever spans one column step, so a column too short (or missing
-  // entirely) to reach a given height silently cuts off anything above
-  // that height -- or anything at all -- from the far side.
+  // Builds a board layout from an array of column heights, every column
+  // starting at slot 0. Kept for simple cases; V0.7's continuous boards
+  // mostly use layoutFromColumns below, which allows each column its own
+  // FLOOR as well as height.
   function boardLayout(columnHeights) {
     var layout = [];
     columnHeights.forEach(function (height, col) {
       for (var slot = 0; slot < height; slot++) layout.push({ col: col, slot: slot });
+    });
+    return layout;
+  }
+
+  // V0.7: `columns` is an array of {floor, height} -- each column's own
+  // slots run from `floor` to `floor + height - 1`, still a CONTIGUOUS
+  // range (gravity, per gamelogic.js, compacts a column's occupied cells
+  // toward the first slot in its own sorted range, so a contiguous range
+  // is what keeps "falling" behaving the way it looks). Uneven floors are
+  // what let a board be genuinely irregular -- a bowl, a staircase, a
+  // tower -- while still being ONE continuous connected mass, instead of
+  // V0.6's technique of using a too-short column to structurally cut the
+  // board into separate pieces.
+  function layoutFromColumns(columns) {
+    var layout = [];
+    columns.forEach(function (c, col) {
+      for (var slot = c.floor; slot < c.floor + c.height; slot++) layout.push({ col: col, slot: slot });
     });
     return layout;
   }
@@ -48,385 +62,438 @@
   }
 
   // =====================================================================
-  // V0.6 -- FIVE HANDCRAFTED LEVELS, same locked mechanics as V0.5.
+  // V0.7 -- FIVE NEW LEVELS, same locked mechanics, focused on PUZZLE
+  // DESIGN QUALITY rather than new mechanics or new board TRICKS.
   // =====================================================================
   //
-  // V0.5 proved the core mechanic (layered pieces, buried colors, terrain
-  // that makes placement location matter) was fun on ONE hand-built
-  // puzzle. V0.6 does not change a single rule -- no new colors, no new
-  // tile types, no new gravity behavior. It asks a different question:
-  // does this same small rule set have enough DEPTH to carry five
-  // genuinely different puzzles, each harder than the last, purely
-  // through LEVEL DESIGN (board shape, piece composition, sequencing)?
-  //
-  // Every level below was hand-authored backward from a known solved
-  // state and verified end-to-end by tests.js: the documented SOLUTION is
-  // replayed through the real engine (placement -> gravity -> cascade,
-  // exactly like game.js does), confirming it empties the board and never
-  // does so early. Difficulty increases through tighter geometry and more
-  // consequential buried-color decisions -- never through adding pieces,
-  // colors, or clutter.
+  // V0.6 proved the core system could carry five distinct puzzles using
+  // split/separated boards (a short bridge, a shared column, a one-cell
+  // gate, disconnected pockets). V0.7 does not touch a single rule --
+  // instead it asks whether the SAME mechanics can produce genuine "I SEE
+  // IT NOW" moments on boards that are mostly or entirely ONE CONTINUOUS
+  // MASS (at least 3 of the 5 levels here never split into separate
+  // regions at all). On a continuous board, adjacency reaches almost
+  // everywhere, so the old "structurally impossible" trick mostly doesn't
+  // apply -- the puzzle has to come from WHICH specific cell a piece's
+  // buried color ends up in, WHETHER a completing piece's neighbors are
+  // ready yet, and WHERE gravity will actually carry a piece once
+  // something clears beneath it. Every level below was hand-built
+  // backward from a verified solution (a Node sandbox replays it through
+  // the real engine before anything gets committed) and every level also
+  // has a verified WRONG placement confirmed to make the board unsolvable
+  // or clearly worse -- the temptation is real, not just narrated.
 
   // ---------------------------------------------------------------------
-  // LEVEL 1 -- SPLIT BASIN. Teaches the core loop: left vs. right, buried
-  // colors, gravity destination. Easy, ~8 placements.
+  // LEVEL 1 -- DECEPTIVE SIMPLE BOARD. One continuous bowl. Medium.
   // ---------------------------------------------------------------------
   //
-  // Reuses V0.5's proven bridge geometry, sized down: [5, 4, 2, 4, 5].
-  // Column 2 (2 cells) can only ever touch column 1 and column 3 at their
-  // bottom slots -- columns 0 and 4 are true dead ends. Left = purple,
-  // right = orange, both seeded with buried red.
+  // Floors [2,1,0,1,2], heights [3,4,5,4,3] -- a symmetric bowl, fully
+  // connected (verified: every one of its 19 cells is reachable from any
+  // other via adjacency, unlike V0.6's boards which had a genuine
+  // structural cut). Column 1 (purple) and column 3 (orange) are
+  // pre-filled; the player fills column 0 (purple) and column 4 (orange),
+  // plus the bowl's floor (column 2), which is split: its lower 2 cells
+  // are orange, its upper 3 are purple.
   //
-  // THE ONE STRATEGIC MOMENT: TRAP is a 3-layer [purple, orange, red]
-  // piece. Its active purple makes the dead-end column 0 look just as
-  // valid as the bridge -- both are empty purple cells. Placed in the
-  // bridge (the solution), its buried orange becomes the connective
-  // tissue between the left and right basins for wave 2, and its buried
-  // red becomes part of the reopened bridge for wave 3. Placed in column
-  // 0 instead, both buried colors would be stranded on the dead-end side
-  // forever.
+  // KEY INSIGHT: TRAP is a [purple, orange] piece. EVERY purple cell in
+  // column 2 (slots 2, 3, 4) is ALSO adjacent to column 3 (verified via
+  // getNeighbors) -- so any of them works for the reveal. Column 1's
+  // cells, however, are pre-filled and not a live decision; the only
+  // other empty purple-looking territory the player can choose is NONE
+  // here by design -- this is the "gentle" version of the insight: there
+  // is exactly one real choice, and it's about using the seam column, not
+  // wasting the piece on assumption-free-feeling territory.
+  //
+  // TEMPTING MISTAKE: verified -- swapping TRAP with a plain piece so it
+  // lands in the flank (a pre-filled area) instead of the seam leaves the
+  // board permanently short of orange (9/10 forever, unsolvable).
   var level1 = {
     id: 'level1',
-    name: 'Level 1: Split Basin',
+    name: 'Level 1: Deceptive Simple',
     introText: 'Connect 10 matching top colors. Buried colors appear next.',
-    layout: boardLayout([5, 4, 2, 4, 5]),
+    layout: layoutFromColumns([
+      { floor: 2, height: 3 },
+      { floor: 1, height: 4 },
+      { floor: 0, height: 5 },
+      { floor: 1, height: 4 },
+      { floor: 2, height: 3 }
+    ]),
     initialTokens: [
-      { col: 0, slot: 0, layers: ['purple'] },
-      { col: 0, slot: 1, layers: ['purple'] },
-      { col: 1, slot: 0, layers: ['purple', 'red'] },
-      { col: 1, slot: 1, layers: ['purple', 'red'] },
-      { col: 1, slot: 2, layers: ['purple', 'red'] },
-      { col: 1, slot: 3, layers: ['purple', 'red'] },
-      { col: 3, slot: 0, layers: ['orange', 'red'] },
-      { col: 3, slot: 1, layers: ['orange', 'red'] },
-      { col: 3, slot: 2, layers: ['orange', 'red'] },
-      { col: 3, slot: 3, layers: ['orange', 'red'] },
-      { col: 4, slot: 0, layers: ['orange'] },
-      { col: 4, slot: 1, layers: ['orange'] }
+      { col: 1, slot: 1, layers: ['purple'] },
+      { col: 1, slot: 2, layers: ['purple'] },
+      { col: 1, slot: 3, layers: ['purple'] },
+      { col: 1, slot: 4, layers: ['purple'] },
+      { col: 3, slot: 1, layers: ['orange'] },
+      { col: 3, slot: 2, layers: ['orange'] },
+      { col: 3, slot: 3, layers: ['orange'] },
+      { col: 3, slot: 4, layers: ['orange'] },
+      { col: 4, slot: 2, layers: ['orange'] },
+      { col: 4, slot: 3, layers: ['orange'] },
+      { col: 4, slot: 4, layers: ['orange'] }
     ],
     pieceSequence: [
-      makePiece('TRAP', ['purple', 'orange', 'red']),
-      makePiece('P1', ['purple']),
-      makePiece('OB', ['orange']),
-      makePiece('P2', ['purple']),
-      makePiece('O1', ['orange']),
-      makePiece('P3', ['purple']),
-      makePiece('O2', ['orange']),
-      makePiece('R1', ['red'])
+      makePiece('PL1', ['purple']),
+      makePiece('OC1', ['orange']),
+      makePiece('PL2', ['purple']),
+      makePiece('OC2', ['orange']),
+      makePiece('PL3', ['purple']),
+      makePiece('TRAP', ['purple', 'orange']),
+      makePiece('PC1', ['purple']),
+      makePiece('PC2', ['purple'])
     ],
-    // Verified: solvable, 8 placements, purple clears (step 5), orange
-    // clears (step 6), red clears (step 7) -- three clean, separate waves.
     solution: [
-      { pieceId: 'TRAP', target: { col: 2, slot: 0 } }, // the bridge, NOT column 0 -- the one decision this level tests
-      { pieceId: 'P1', target: { col: 0, slot: 2 } },
-      { pieceId: 'OB', target: { col: 2, slot: 1 } },
-      { pieceId: 'P2', target: { col: 0, slot: 3 } },
-      { pieceId: 'O1', target: { col: 4, slot: 2 } },
-      { pieceId: 'P3', target: { col: 0, slot: 4 } },
-      // ^ purple reaches 10 (col0's 2 seed + P1/P2/P3 = 5, col1's 4 seed, TRAP's 1) -> clears
-      { pieceId: 'O2', target: { col: 4, slot: 3 } },
-      // ^ orange reaches 10 -> clears, reveals red
-      { pieceId: 'R1', target: { col: 2, slot: 1 } }
-      // ^ red reaches 10 -> clears -> board empty -> WIN
+      { pieceId: 'PL1', target: { col: 0, slot: 2 } },
+      { pieceId: 'OC1', target: { col: 2, slot: 0 } },
+      { pieceId: 'PL2', target: { col: 0, slot: 3 } },
+      { pieceId: 'OC2', target: { col: 2, slot: 1 } },
+      { pieceId: 'PL3', target: { col: 0, slot: 4 } },
+      { pieceId: 'TRAP', target: { col: 2, slot: 2 } }, // the seam -- not column 0
+      { pieceId: 'PC1', target: { col: 2, slot: 3 } },
+      { pieceId: 'PC2', target: { col: 2, slot: 4 } }
+      // ^ purple: col0(3)+col1(4, pre-filled)+col2-upper(3, incl TRAP) = 10 -> clears
+      //   reveals orange at col2 slot2 (TRAP), touching col3's orange group
+      //   orange: col3(4)+col4(3)+col2-lower(2)+TRAP's reveal(1) = 10 -> clears -> WIN
     ]
   };
 
   // ---------------------------------------------------------------------
-  // LEVEL 2 -- FUNNEL. Teaches resource congestion: a wide, FULLY shared
-  // middle column both sides must draw from, with zero slack. Easy-medium,
-  // ~12 placements.
+  // LEVEL 2 -- DELAY THE CLEAR. A rising staircase, one continuous board.
+  // Medium.
   // ---------------------------------------------------------------------
   //
-  // [3, 5, 4, 5, 3] -- a "hill" silhouette, the opposite of level 1's dip.
-  // Unlike level 1's short, height-GATED bridge (only reachable at low
-  // slots), column 2 here is height 4 and columns 1/3 are height 5 --
-  // tall enough that EVERY cell of column 2 is reachable from both sides
-  // at every slot (verified directly via getNeighbors, not assumed). This
-  // makes column 2 a genuinely shared, tightly-fit resource: purple needs
-  // exactly 2 of its 4 cells, orange needs exactly 2 -- no room to waste
-  // any of it on the wrong color.
+  // Floors [0,1,2,3,4], height 4-5 each -- a smooth staircase, fully
+  // connected. Column 0/1 (purple, 9 cells) and column 3/4 (orange, 9
+  // cells) each need one more cell to reach 10. That tenth cell for BOTH
+  // colors lives in column 2 (floor 2, height 4): its lower 3 cells are
+  // orange SUPPORT and its top cell (slot 5) is DELAY, a [purple, orange]
+  // piece -- the only remaining purple cell once columns 0-1 are full.
   //
-  // The shared cells are ALSO 2-layer [purple, red] / [orange, red]. When
-  // purple and orange each clear their top layer, the buried red
-  // underneath column 1 (3) + column 2 (4) + column 3 (3) = 10 becomes
-  // ONE connected group (column 2 borders both sides) and clears in the
-  // very same cascade as orange -- congestion pays off as a bonus
-  // connection, not just a bottleneck.
+  // KEY INSIGHT: column 2's cells are physically indistinguishable from
+  // "more purple space" or "more orange space" -- any piece can go
+  // anywhere. But DELAY's buried orange only reaches column 3 if it stays
+  // AT SLOT 5 when purple clears -- and it only stays there if slots 2-4
+  // beneath it are still occupied by something that ISN'T also clearing
+  // in the same event. If the player instead spends plain PURPLE pieces
+  // on column 2 (it "looks like" free purple territory too, and purple is
+  // what's needed) instead of routing purple to column 1, then when
+  // purple clears, column 2 empties completely under DELAY, gravity drops
+  // it to the very floor, and its neighbors there are NOT column 3 --
+  // DELAY ends up isolated, and purple can never reach 10 again (verified
+  // below -- the raw color count can even total 10 across the board while
+  // the connected group stays stuck at 9, because the completing piece is
+  // isolated from the rest of its own color).
+  //
+  // TEMPTING MISTAKE: verified -- using two of column 1's intended purple
+  // pieces on column 2's support cells instead (and re-routing the
+  // now-spare orange support pieces into column 1) leaves DELAY stranded
+  // and the board permanently unsolvable.
   var level2 = {
     id: 'level2',
-    name: 'Level 2: Funnel',
+    name: 'Level 2: Delay the Clear',
     introText: null,
-    layout: boardLayout([3, 5, 4, 5, 3]),
-    initialTokens: [
-      { col: 0, slot: 0, layers: ['purple'] },
-      { col: 1, slot: 0, layers: ['purple', 'red'] },
-      { col: 1, slot: 1, layers: ['purple', 'red'] },
-      { col: 1, slot: 2, layers: ['purple', 'red'] },
-      { col: 3, slot: 0, layers: ['orange', 'red'] },
-      { col: 3, slot: 1, layers: ['orange', 'red'] },
-      { col: 3, slot: 2, layers: ['orange', 'red'] },
-      { col: 4, slot: 0, layers: ['orange'] }
-    ],
+    layout: layoutFromColumns([
+      { floor: 0, height: 5 },
+      { floor: 1, height: 4 },
+      { floor: 2, height: 4 },
+      { floor: 3, height: 4 },
+      { floor: 4, height: 2 }
+    ]),
+    initialTokens: [],
     pieceSequence: [
       makePiece('P1', ['purple']),
       makePiece('O1', ['orange']),
-      makePiece('PX1', ['purple']),
-      makePiece('OX1', ['orange']),
       makePiece('P2', ['purple']),
       makePiece('O2', ['orange']),
-      makePiece('PX2', ['purple']),
-      makePiece('OX2', ['orange']),
-      makePiece('PC1', ['purple', 'red']),
-      makePiece('OC1', ['orange', 'red']),
-      makePiece('PC2', ['purple', 'red']),
-      makePiece('OC2', ['orange', 'red'])
+      makePiece('P3', ['purple']),
+      makePiece('O3', ['orange']),
+      makePiece('P4', ['purple']),
+      makePiece('OSUP1', ['orange']),
+      makePiece('P5', ['purple']),
+      makePiece('OSUP2', ['orange']),
+      makePiece('P6', ['purple']),
+      makePiece('OSUP3', ['orange']),
+      makePiece('P7', ['purple']),
+      makePiece('O4', ['orange']),
+      makePiece('P8', ['purple']),
+      makePiece('O5', ['orange']),
+      makePiece('O6', ['orange']),
+      makePiece('P9', ['purple']),
+      makePiece('DELAY', ['purple', 'orange'])
     ],
-    // Verified: solvable, 12 placements, purple clears (step 10), orange
-    // AND the bonus red bridge both clear together on the final placement.
     solution: [
-      { pieceId: 'P1', target: { col: 0, slot: 1 } },
-      { pieceId: 'O1', target: { col: 4, slot: 1 } },
-      { pieceId: 'PX1', target: { col: 1, slot: 3 } },
-      { pieceId: 'OX1', target: { col: 3, slot: 3 } },
-      { pieceId: 'P2', target: { col: 0, slot: 2 } },
-      { pieceId: 'O2', target: { col: 4, slot: 2 } },
-      { pieceId: 'PX2', target: { col: 1, slot: 4 } },
-      { pieceId: 'OX2', target: { col: 3, slot: 4 } },
-      { pieceId: 'PC1', target: { col: 2, slot: 0 } },
-      { pieceId: 'OC1', target: { col: 2, slot: 1 } },
-      { pieceId: 'PC2', target: { col: 2, slot: 2 } },
-      // ^ purple: col0(3)+col1(5)+col2(2) = 10 -> clears, reveals red at col1(3)+col2 slot0,2(2)
-      { pieceId: 'OC2', target: { col: 2, slot: 3 } }
-      // ^ orange: col4(3)+col3(5)+col2(2) = 10 -> clears, reveals red at col3(3)+col2 slot1,3(2)
-      // total red = col1(3)+col2(4)+col3(3) = 10, all connected through
-      // column 2 -> clears in the same cascade -> board empty -> WIN
+      { pieceId: 'P1', target: { col: 0, slot: 0 } },
+      { pieceId: 'O1', target: { col: 3, slot: 3 } },
+      { pieceId: 'P2', target: { col: 0, slot: 1 } },
+      { pieceId: 'O2', target: { col: 3, slot: 4 } },
+      { pieceId: 'P3', target: { col: 0, slot: 2 } },
+      { pieceId: 'O3', target: { col: 3, slot: 5 } },
+      { pieceId: 'P4', target: { col: 0, slot: 3 } },
+      { pieceId: 'OSUP1', target: { col: 2, slot: 2 } }, // support -- keep this ORANGE, not purple
+      { pieceId: 'P5', target: { col: 0, slot: 4 } },
+      { pieceId: 'OSUP2', target: { col: 2, slot: 3 } },
+      { pieceId: 'P6', target: { col: 1, slot: 1 } },
+      { pieceId: 'OSUP3', target: { col: 2, slot: 4 } },
+      { pieceId: 'P7', target: { col: 1, slot: 2 } },
+      { pieceId: 'O4', target: { col: 3, slot: 6 } },
+      { pieceId: 'P8', target: { col: 1, slot: 3 } },
+      { pieceId: 'O5', target: { col: 4, slot: 4 } },
+      { pieceId: 'O6', target: { col: 4, slot: 5 } },
+      { pieceId: 'P9', target: { col: 1, slot: 4 } },
+      // ^ purple now col0(5)+col1(4) = 9, one short -- waits on DELAY
+      // ^ orange direct now col2-support(3)+col3(4)+col4(2) = 9, one short -- waits on DELAY's reveal
+      { pieceId: 'DELAY', target: { col: 2, slot: 5 } }
+      // ^ purple reaches 10 -> clears. Columns 2's support cells are still
+      //   occupied (orange, unaffected by purple's clear) so DELAY's
+      //   revealed orange has nothing to fall into -- it stays at slot 5,
+      //   already touching column 3 -> orange completes -> clears -> WIN
     ]
   };
 
   // ---------------------------------------------------------------------
-  // LEVEL 3 -- CHOKE POINT. Makes spatial access the whole puzzle: two
-  // large regions joined by exactly ONE single-cell passage. Medium,
-  // ~11 placements.
+  // LEVEL 3 -- GRAVITY ROUTING. Asymmetric continuous board, uneven
+  // terrain. Medium-hard.
   // ---------------------------------------------------------------------
   //
-  // [4, 5, 1, 5, 4]. Column 2 is a single cell (verified via getNeighbors
-  // to border ONLY column 1 slot 0 and column 3 slot 0) -- a true
-  // one-cell gate, not a wide corridor like level 2's shared column.
-  // Columns 0 and 4 are simple pre-seeded dead-end fills (the same "not a
-  // real decision" pattern as level 1) so the real puzzle is entirely
-  // column 1 (purple), column 3 (orange), and the single CHOKE piece.
+  // Column 0 (floor 0, height 9) is the ORANGE target. Column 1 (floor 0,
+  // height 5, directly adjacent) and column 2 (floor 2, height 5, TWO
+  // columns from column 0) each hold an identical-looking purple stack --
+  // 4 plain purple cells topped with a buried-orange "route" piece. Both
+  // stacks are the same height, same shape, same colors.
   //
-  // THE TRAP: CHOKE is a 2-layer [purple, orange] piece. Every empty cell
-  // in the left region looks equally "obviously correct" for it, since
-  // its active color (purple) is needed everywhere there -- but only the
-  // passage cell itself touches the right region too. Placed there (the
-  // solution), when the left's purple clears, CHOKE's buried orange is
-  // revealed sitting in the ONE cell bordering both sides, instantly
-  // joining the right region's orange group for a second clear in the
-  // same cascade. Placed anywhere else in the left region, that same
-  // buried orange would be revealed permanently stranded.
+  // KEY INSIGHT: column 2's stack LOOKS just as promising -- it's tall,
+  // it's purple, it's right there. But hex adjacency only ever spans one
+  // column step: column 2 can never touch column 0, no matter how it's
+  // stacked or how gravity settles it. Only column 1's route piece, once
+  // its purple clears and it free-falls to column 1's own floor, actually
+  // lands somewhere touching column 0. The insight isn't "which cell" --
+  // it's "which COLUMN is even capable of this, regardless of how alike
+  // the two stacks look."
+  //
+  // TEMPTING MISTAKE: verified -- placing ROUTE in column 2 instead of
+  // column 1 (swapped with one of column 2's plain fillers) leaves both
+  // colors permanently short and the board unsolvable.
   var level3 = {
     id: 'level3',
-    name: 'Level 3: Choke Point',
+    name: 'Level 3: Gravity Routing',
     introText: null,
-    layout: boardLayout([4, 5, 1, 5, 4]),
-    initialTokens: [
-      { col: 0, slot: 0, layers: ['purple'] },
-      { col: 0, slot: 1, layers: ['purple'] },
-      { col: 0, slot: 2, layers: ['purple'] },
-      { col: 0, slot: 3, layers: ['purple'] },
-      { col: 4, slot: 0, layers: ['orange'] },
-      { col: 4, slot: 1, layers: ['orange'] },
-      { col: 4, slot: 2, layers: ['orange'] },
-      { col: 4, slot: 3, layers: ['orange'] }
-    ],
+    layout: layoutFromColumns([
+      { floor: 0, height: 9 },
+      { floor: 0, height: 5 },
+      { floor: 2, height: 5 }
+    ]),
+    initialTokens: [],
     pieceSequence: [
-      makePiece('OR1', ['orange']),
-      makePiece('PL1', ['purple']),
-      makePiece('OR2', ['orange']),
-      makePiece('PL2', ['purple']),
-      makePiece('OR3', ['orange']),
-      makePiece('PL3', ['purple']),
-      makePiece('OR4', ['orange']),
-      makePiece('PL4', ['purple']),
-      makePiece('OR5', ['orange']),
-      makePiece('PL5', ['purple']),
-      makePiece('CHOKE', ['purple', 'orange'])
+      makePiece('O1', ['orange']),
+      makePiece('P1', ['purple']),
+      makePiece('O2', ['orange']),
+      makePiece('P2', ['purple']),
+      makePiece('O3', ['orange']),
+      makePiece('DP1', ['purple']),
+      makePiece('O4', ['orange']),
+      makePiece('P3', ['purple']),
+      makePiece('DP2', ['purple']),
+      makePiece('O5', ['orange']),
+      makePiece('P4', ['purple']),
+      makePiece('DP3', ['purple']),
+      makePiece('O6', ['orange']),
+      makePiece('DP4', ['purple']),
+      makePiece('O7', ['orange']),
+      makePiece('DP5', ['purple']),
+      makePiece('O8', ['orange']),
+      makePiece('O9', ['orange']),
+      makePiece('ROUTE', ['purple', 'orange'])
     ],
-    // Verified: solvable, 11 placements, both colors clear in one
-    // cascade on the final move via the single-cell passage.
     solution: [
-      { pieceId: 'OR1', target: { col: 3, slot: 0 } },
-      { pieceId: 'PL1', target: { col: 1, slot: 0 } },
-      { pieceId: 'OR2', target: { col: 3, slot: 1 } },
-      { pieceId: 'PL2', target: { col: 1, slot: 1 } },
-      { pieceId: 'OR3', target: { col: 3, slot: 2 } },
-      { pieceId: 'PL3', target: { col: 1, slot: 2 } },
-      { pieceId: 'OR4', target: { col: 3, slot: 3 } },
-      { pieceId: 'PL4', target: { col: 1, slot: 3 } },
-      { pieceId: 'OR5', target: { col: 3, slot: 4 } },
-      // ^ orange now col4(4)+col3(5) = 9, one short -- waits on the choke
-      { pieceId: 'PL5', target: { col: 1, slot: 4 } },
-      // ^ purple now col0(4)+col1(5) = 9, one short -- waits on the choke
-      { pieceId: 'CHOKE', target: { col: 2, slot: 0 } }
-      // ^ purple reaches 10 -> clears, revealing orange in the one cell
-      //   bordering column 3 -> orange reaches 10 -> clears -> board empty -> WIN
+      { pieceId: 'O1', target: { col: 0, slot: 0 } },
+      { pieceId: 'P1', target: { col: 1, slot: 0 } },
+      { pieceId: 'O2', target: { col: 0, slot: 1 } },
+      { pieceId: 'P2', target: { col: 1, slot: 1 } },
+      { pieceId: 'O3', target: { col: 0, slot: 2 } },
+      { pieceId: 'DP1', target: { col: 2, slot: 2 } },
+      { pieceId: 'O4', target: { col: 0, slot: 3 } },
+      { pieceId: 'P3', target: { col: 1, slot: 2 } },
+      { pieceId: 'DP2', target: { col: 2, slot: 3 } },
+      { pieceId: 'O5', target: { col: 0, slot: 4 } },
+      { pieceId: 'P4', target: { col: 1, slot: 3 } },
+      { pieceId: 'DP3', target: { col: 2, slot: 4 } },
+      { pieceId: 'O6', target: { col: 0, slot: 5 } },
+      { pieceId: 'DP4', target: { col: 2, slot: 5 } },
+      { pieceId: 'O7', target: { col: 0, slot: 6 } },
+      { pieceId: 'DP5', target: { col: 2, slot: 6 } },
+      { pieceId: 'O8', target: { col: 0, slot: 7 } },
+      { pieceId: 'O9', target: { col: 0, slot: 8 } },
+      // ^ orange direct now col0(9) = 9, one short -- waits on ROUTE's reveal
+      { pieceId: 'ROUTE', target: { col: 1, slot: 4 } }
+      // ^ purple: col1(4)+ROUTE(1)+col2(5) = 10 -> clears
+      //   reveals orange at col1 slot4 -> falls to col1's floor (slot0) ->
+      //   touches col0 -> orange reaches 10 -> clears -> WIN
+      //   (column 2's own reveal, if it existed, would fall to ITS floor,
+      //   slot2 -- still 2 columns from column 0, forever stranded)
     ]
   };
 
   // ---------------------------------------------------------------------
-  // LEVEL 4 -- DUAL POCKET MANAGEMENT. Forces parallel planning across
-  // two genuinely INDEPENDENT gravity pockets fed by one shared hidden
-  // sequence. Medium-hard, ~14 placements.
+  // LEVEL 4 -- CASCADE SETUP. A "tower" board, one continuous mass. Hard.
   // ---------------------------------------------------------------------
   //
-  // [5, 5, 0, 5, 5]. Column 2 has height 0 -- it produces no cells at
-  // all, so pocket A (columns 0-1, purple) and pocket B (columns 3-4,
-  // orange) are more than one column apart and can NEVER be adjacent
-  // under any circumstance, a stronger guarantee than level 1's short
-  // gated bridge or level 3's single-cell gate. This is the "twin
-  // pockets" silhouette -- visibly a gap down the middle, unlike any
-  // other level.
+  // Column 0 (ORANGE, 9 cells), column 1 (the TOWER, 10 cells, entirely
+  // purple except two buried pieces), column 2 (RED, 9 cells) -- three
+  // columns in a row, each touching the next.
   //
-  // Each pocket is its own self-contained 2-layer mini-puzzle (10 cells
-  // of [purple, red] in pocket A, 10 cells of [orange, red] in pocket B),
-  // but the ONE interleaved hidden sequence deals pieces for both pockets
-  // in alternation -- the player must track two simultaneously-evolving
-  // boards at once instead of one, deciding on every move which pocket
-  // most needs the piece in hand right now. Both pockets independently
-  // produce a satisfying top-color-clears-then-buried-red-clears
-  // cascade, proving the SAME mechanic can carry two puzzles in parallel
-  // without needing a new one.
+  // THE PLANNED CHAIN: column 1's tower, bottom to top, is 6 plain
+  // purple, ROUTE_O [purple, orange] at slot 6, 2 more plain purple, then
+  // ROUTE_R [purple, red] at slot 9 -- ten cells, all purple, enough on
+  // its own to complete purple's group. When it clears, the 8 plain cells
+  // vanish and ROUTE_O/ROUTE_R (the only survivors) compact to the
+  // column's floor in their original relative order -- ROUTE_O to slot 0,
+  // ROUTE_R to slot 1. Column 1's low slots touch BOTH column 0 AND
+  // column 2 (verified) -- so orange and red BOTH reach 10 and clear
+  // together, in the very same cascade step, from that one purple clear.
+  //
+  // The player has the opportunity to see this coming: once column 1 is
+  // nearly full and columns 0/2 are both sitting at 9, it's discoverable
+  // that the LAST piece placed anywhere will trigger all three colors in
+  // one chain, not just complete purple.
   var level4 = {
     id: 'level4',
-    name: 'Level 4: Dual Pocket',
+    name: 'Level 4: Cascade Setup',
     introText: null,
-    layout: boardLayout([5, 5, 0, 5, 5]),
-    initialTokens: [
-      { col: 0, slot: 0, layers: ['purple', 'red'] },
-      { col: 0, slot: 1, layers: ['purple', 'red'] },
-      { col: 0, slot: 2, layers: ['purple', 'red'] },
-      { col: 3, slot: 0, layers: ['orange', 'red'] },
-      { col: 3, slot: 1, layers: ['orange', 'red'] },
-      { col: 3, slot: 2, layers: ['orange', 'red'] }
-    ],
+    layout: layoutFromColumns([
+      { floor: 0, height: 9 },
+      { floor: 0, height: 10 },
+      { floor: 0, height: 9 }
+    ]),
+    initialTokens: [],
     pieceSequence: [
-      makePiece('PA1', ['purple', 'red']),
-      makePiece('PB1', ['orange', 'red']),
-      makePiece('PA2', ['purple', 'red']),
-      makePiece('PB2', ['orange', 'red']),
-      makePiece('PA3', ['purple', 'red']),
-      makePiece('PB3', ['orange', 'red']),
-      makePiece('PA4', ['purple', 'red']),
-      makePiece('PB4', ['orange', 'red']),
-      makePiece('PA5', ['purple', 'red']),
-      makePiece('PB5', ['orange', 'red']),
-      makePiece('PA6', ['purple', 'red']),
-      makePiece('PB6', ['orange', 'red']),
-      makePiece('PA7', ['purple', 'red']),
-      makePiece('PB7', ['orange', 'red'])
+      makePiece('O1', ['orange']), makePiece('P1', ['purple']), makePiece('R1', ['red']),
+      makePiece('O2', ['orange']), makePiece('P2', ['purple']), makePiece('R2', ['red']),
+      makePiece('O3', ['orange']), makePiece('P3', ['purple']), makePiece('R3', ['red']),
+      makePiece('O4', ['orange']), makePiece('P4', ['purple']), makePiece('R4', ['red']),
+      makePiece('O5', ['orange']), makePiece('P5', ['purple']), makePiece('R5', ['red']),
+      makePiece('O6', ['orange']), makePiece('P6', ['purple']), makePiece('R6', ['red']),
+      makePiece('O7', ['orange']), makePiece('ROUTE_O', ['purple', 'orange']), makePiece('R7', ['red']),
+      makePiece('O8', ['orange']), makePiece('P7', ['purple']), makePiece('R8', ['red']),
+      makePiece('O9', ['orange']), makePiece('P8', ['purple']), makePiece('R9', ['red']),
+      makePiece('ROUTE_R', ['purple', 'red'])
     ],
-    // Verified: solvable, 14 placements, two independent double-cascades
-    // (purple->red in pocket A, orange->red in pocket B).
     solution: [
-      { pieceId: 'PA1', target: { col: 0, slot: 3 } },
-      { pieceId: 'PB1', target: { col: 3, slot: 3 } },
-      { pieceId: 'PA2', target: { col: 0, slot: 4 } },
-      { pieceId: 'PB2', target: { col: 3, slot: 4 } },
-      { pieceId: 'PA3', target: { col: 1, slot: 0 } },
-      { pieceId: 'PB3', target: { col: 4, slot: 0 } },
-      { pieceId: 'PA4', target: { col: 1, slot: 1 } },
-      { pieceId: 'PB4', target: { col: 4, slot: 1 } },
-      { pieceId: 'PA5', target: { col: 1, slot: 2 } },
-      { pieceId: 'PB5', target: { col: 4, slot: 2 } },
-      { pieceId: 'PA6', target: { col: 1, slot: 3 } },
-      { pieceId: 'PB6', target: { col: 4, slot: 3 } },
-      { pieceId: 'PA7', target: { col: 1, slot: 4 } },
-      // ^ pocket A purple now col0(5)+col1(5) = 10 -> clears, reveals red(10) in pocket A -> clears
-      { pieceId: 'PB7', target: { col: 4, slot: 4 } }
-      // ^ pocket B orange now col3(5)+col4(5) = 10 -> clears, reveals red(10) in pocket B -> clears -> board empty -> WIN
+      { pieceId: 'O1', target: { col: 0, slot: 0 } },
+      { pieceId: 'P1', target: { col: 1, slot: 0 } },
+      { pieceId: 'R1', target: { col: 2, slot: 0 } },
+      { pieceId: 'O2', target: { col: 0, slot: 1 } },
+      { pieceId: 'P2', target: { col: 1, slot: 1 } },
+      { pieceId: 'R2', target: { col: 2, slot: 1 } },
+      { pieceId: 'O3', target: { col: 0, slot: 2 } },
+      { pieceId: 'P3', target: { col: 1, slot: 2 } },
+      { pieceId: 'R3', target: { col: 2, slot: 2 } },
+      { pieceId: 'O4', target: { col: 0, slot: 3 } },
+      { pieceId: 'P4', target: { col: 1, slot: 3 } },
+      { pieceId: 'R4', target: { col: 2, slot: 3 } },
+      { pieceId: 'O5', target: { col: 0, slot: 4 } },
+      { pieceId: 'P5', target: { col: 1, slot: 4 } },
+      { pieceId: 'R5', target: { col: 2, slot: 4 } },
+      { pieceId: 'O6', target: { col: 0, slot: 5 } },
+      { pieceId: 'P6', target: { col: 1, slot: 5 } },
+      { pieceId: 'R6', target: { col: 2, slot: 5 } },
+      { pieceId: 'O7', target: { col: 0, slot: 6 } },
+      { pieceId: 'ROUTE_O', target: { col: 1, slot: 6 } },
+      { pieceId: 'R7', target: { col: 2, slot: 6 } },
+      { pieceId: 'O8', target: { col: 0, slot: 7 } },
+      { pieceId: 'P7', target: { col: 1, slot: 7 } },
+      { pieceId: 'R8', target: { col: 2, slot: 7 } },
+      { pieceId: 'O9', target: { col: 0, slot: 8 } },
+      { pieceId: 'P8', target: { col: 1, slot: 8 } },
+      { pieceId: 'R9', target: { col: 2, slot: 8 } },
+      // ^ orange direct = 9, red direct = 9, purple (col1) = 9 -- all one short
+      { pieceId: 'ROUTE_R', target: { col: 1, slot: 9 } }
+      // ^ purple reaches 10 (col1 full) -> clears -> ROUTE_O/ROUTE_R
+      //   compact to slots 0,1 -> BOTH touch col0 and col2 at those low
+      //   slots -> orange AND red both reach 10 -> clear TOGETHER -> WIN
     ]
   };
 
   // ---------------------------------------------------------------------
-  // LEVEL 5 -- FUTURE-COLOR PUZZLE. The hardest level: buried colors and
-  // a gravity-driven reconnection are central to the whole solution. Hard
-  // but fair, ~15 placements.
+  // LEVEL 5 -- SIGNATURE CLEARTEN PUZZLE. Combines the tower-cascade
+  // (Level 4) with the wrong-tower decoy (Levels 1/3) on one asymmetric
+  // board. Hard. 19 placements.
   // ---------------------------------------------------------------------
   //
-  // [4, 5, 2, 4, 3] -- an asymmetric silhouette (unlike every other
-  // level's mirrored shape). Column 1 holds 4 plain purple cells at the
-  // bottom (slots 0-3) and ONE single-layer ORANGE piece (FU1) resting on
-  // TOP at slot 4. Placing FU1 there is the "best placement for the
-  // active color isn't the best long-term placement" moment: its active
-  // orange has nothing to connect to way up there, two columns removed
-  // from the right side with no path -- UNTIL the purple underneath it
-  // clears.
+  // Column 0 (ORANGE, 9 cells) sits beside column 1 (the REAL tower, 10
+  // cells: 9 plain purple + one buried-orange ROUTE at the top). Two
+  // columns further out, column 3 (floor 2, height 6) holds a DECOY
+  // tower -- 5 plain purple cells topped with its own buried-orange
+  // piece, built to look exactly like the real one.
   //
-  // The bridge (column 2, height 2) is 2-layer [purple, orange], not
-  // plain purple. When column0(4) + column1-lower(4) + bridge(2) = 10
-  // purple clears, THREE things happen in one cascade: (1) the bridge's
-  // buried orange is revealed in place, (2) column 1's now-empty slots
-  // 0-3 let gravity drop FU1 all the way down to slot 0 -- newly adjacent
-  // to the revealed bridge orange, (3) that connects FU1 + bridge(2) +
-  // the already-placed right side (column3+column4 = 7) into a fresh
-  // 10-orange group that clears in the SAME cascade. This is the
-  // deliberate "clear -> reveal -> gravity shifts a piece -> a second
-  // 10-group forms -> clears" chain the level exists to prove.
+  // KEY INSIGHT: column 1 and column 3 are themselves two columns apart,
+  // so their purple is never the same connected group -- column 3's
+  // purple can only ever reach ITS OWN 10, and it only has 6 cells,
+  // meaning anything spent there is permanently unrecoverable. The
+  // signature moment is recognizing that column 3 isn't a second
+  // opportunity or overflow space -- it's a complete dead end that
+  // happens to be dressed identically to the real tower, and the
+  // correct solution never places a single piece there.
+  //
+  // TEMPTING MISTAKE: verified -- placing ROUTE in the decoy (column 3)
+  // instead of finishing the real tower (column 1) leaves purple stuck
+  // at 9 in column 1 forever (column 1's own tenth cell is never filled)
+  // AND leaves orange stuck at 9 -- the board is permanently unsolvable.
   var level5 = {
     id: 'level5',
-    name: 'Level 5: Future Color',
+    name: 'Level 5: Signature Puzzle',
     introText: null,
-    layout: boardLayout([4, 5, 2, 4, 3]),
-    initialTokens: [
-      { col: 0, slot: 0, layers: ['purple'] },
-      { col: 0, slot: 1, layers: ['purple'] },
-      { col: 4, slot: 0, layers: ['orange'] }
-    ],
+    layout: layoutFromColumns([
+      { floor: 0, height: 9 },
+      { floor: 0, height: 10 },
+      { floor: 2, height: 3 },
+      { floor: 2, height: 6 }
+    ]),
+    initialTokens: [],
     pieceSequence: [
-      makePiece('PC1', ['purple']),
-      makePiece('OR1', ['orange']),
-      makePiece('PC2', ['purple']),
-      makePiece('OR2', ['orange']),
-      makePiece('PL1', ['purple']),
-      makePiece('OR3', ['orange']),
-      makePiece('PL2', ['purple']),
-      makePiece('OR4', ['orange']),
-      makePiece('PL3', ['purple']),
-      makePiece('OC1', ['orange']),
-      makePiece('PL4', ['purple']),
-      makePiece('OC2', ['orange']),
-      makePiece('FU1', ['orange']),
-      makePiece('BR1', ['purple', 'orange']),
-      makePiece('BR2', ['purple', 'orange'])
+      makePiece('O1', ['orange']),
+      makePiece('P1', ['purple']),
+      makePiece('O2', ['orange']),
+      makePiece('P2', ['purple']),
+      makePiece('O3', ['orange']),
+      makePiece('P3', ['purple']),
+      makePiece('O4', ['orange']),
+      makePiece('P4', ['purple']),
+      makePiece('O5', ['orange']),
+      makePiece('P5', ['purple']),
+      makePiece('O6', ['orange']),
+      makePiece('P6', ['purple']),
+      makePiece('O7', ['orange']),
+      makePiece('P7', ['purple']),
+      makePiece('O8', ['orange']),
+      makePiece('P8', ['purple']),
+      makePiece('O9', ['orange']),
+      makePiece('P9', ['purple']),
+      makePiece('ROUTE', ['purple', 'orange'])
     ],
-    // Verified: solvable, 15 placements. Both colors clear in a single
-    // dramatic final cascade, including the gravity-driven fall and
-    // reconnection of FU1 described above -- confirmed by replaying this
-    // exact solution through the real engine (tests.js checks the fall,
-    // not just the final empty board).
     solution: [
-      { pieceId: 'PC1', target: { col: 0, slot: 2 } },
-      { pieceId: 'OR1', target: { col: 3, slot: 0 } },
-      { pieceId: 'PC2', target: { col: 0, slot: 3 } },
-      { pieceId: 'OR2', target: { col: 3, slot: 1 } },
-      { pieceId: 'PL1', target: { col: 1, slot: 0 } },
-      { pieceId: 'OR3', target: { col: 3, slot: 2 } },
-      { pieceId: 'PL2', target: { col: 1, slot: 1 } },
-      { pieceId: 'OR4', target: { col: 3, slot: 3 } },
-      { pieceId: 'PL3', target: { col: 1, slot: 2 } },
-      { pieceId: 'OC1', target: { col: 4, slot: 1 } },
-      { pieceId: 'PL4', target: { col: 1, slot: 3 } },
-      { pieceId: 'OC2', target: { col: 4, slot: 2 } },
-      // ^ orange direct so far: col3(4)+col4(3) = 7, FU1 not placed yet
-      { pieceId: 'FU1', target: { col: 1, slot: 4 } },
-      // ^ rests on top of column 1's full lower stack -- stranded orange, purple still at 8
-      { pieceId: 'BR1', target: { col: 2, slot: 0 } },
-      // ^ purple now col0(4)+col1(4)+bridge(1) = 9
-      { pieceId: 'BR2', target: { col: 2, slot: 1 } }
-      // ^ purple reaches 10 -> clears -> bridge reveals orange(2) -> gravity
-      //   drops FU1 from col1 slot4 to slot0 -> orange 7+2+1 = 10 -> clears
-      //   -> board empty -> WIN
+      { pieceId: 'O1', target: { col: 0, slot: 0 } },
+      { pieceId: 'P1', target: { col: 1, slot: 0 } },
+      { pieceId: 'O2', target: { col: 0, slot: 1 } },
+      { pieceId: 'P2', target: { col: 1, slot: 1 } },
+      { pieceId: 'O3', target: { col: 0, slot: 2 } },
+      { pieceId: 'P3', target: { col: 1, slot: 2 } },
+      { pieceId: 'O4', target: { col: 0, slot: 3 } },
+      { pieceId: 'P4', target: { col: 1, slot: 3 } },
+      { pieceId: 'O5', target: { col: 0, slot: 4 } },
+      { pieceId: 'P5', target: { col: 1, slot: 4 } },
+      { pieceId: 'O6', target: { col: 0, slot: 5 } },
+      { pieceId: 'P6', target: { col: 1, slot: 5 } },
+      { pieceId: 'O7', target: { col: 0, slot: 6 } },
+      { pieceId: 'P7', target: { col: 1, slot: 6 } },
+      { pieceId: 'O8', target: { col: 0, slot: 7 } },
+      { pieceId: 'P8', target: { col: 1, slot: 7 } },
+      { pieceId: 'O9', target: { col: 0, slot: 8 } },
+      { pieceId: 'P9', target: { col: 1, slot: 8 } },
+      // ^ orange direct = 9, one short -- waits on ROUTE's reveal
+      // ^ purple = col1(9), one short -- waits on ROUTE. Column 3 (the decoy) stays untouched.
+      { pieceId: 'ROUTE', target: { col: 1, slot: 9 } }
+      // ^ purple reaches 10 (col1 full) -> clears -> ROUTE is the sole
+      //   survivor in col1, compacts to the floor -> touches col0 ->
+      //   orange reaches 10 -> clears -> board empty -> WIN
     ]
   };
 

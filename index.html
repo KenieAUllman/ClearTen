@@ -39,7 +39,10 @@
         <div id="current-pieces" class="piece-row current-row"></div>
       </div>
       <div class="controls-row">
-        <button id="undo-btn" class="btn btn-secondary">Undo</button>
+        <!-- V0.7: Undo is a developer/debug-only tool now (see DEBUG in
+             game.js) -- normal play only has Restart. This button stays
+             hidden unless DEBUG is true. -->
+        <button id="undo-btn" class="btn btn-secondary" hidden>Undo (debug)</button>
         <button id="restart-btn" class="btn btn-secondary">Restart</button>
       </div>
     </footer>
