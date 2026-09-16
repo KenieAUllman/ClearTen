@@ -146,12 +146,16 @@ body {
 }
 
 .layer-circle {
-  stroke: rgba(255, 255, 255, 0.55);
-  stroke-width: 0.35;
+  stroke: rgba(255, 255, 255, 0.6);
+  stroke-width: 0.3;
 }
 
-.layer-buried {
-  opacity: 0.9;
+.layer-active {
+  stroke-width: 0.4;
+}
+
+.layer-pip {
+  opacity: 0.95;
 }
 
 .layer-active.clearing {
@@ -265,29 +269,21 @@ body {
   margin-bottom: 6px;
 }
 
-.pieces-label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--ink-soft);
-  margin: 8px 2px 6px;
-}
-
 .piece-row {
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 
 .piece-slot {
   flex: 1;
-  min-height: 64px;
-  border-radius: 14px;
+  min-height: 84px;
+  border-radius: 16px;
   background: var(--bg);
   border: 2px solid transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px;
+  padding: 8px;
   transition: border-color 120ms ease, transform 120ms ease;
 }
 
@@ -304,20 +300,14 @@ body {
   background: #eaf1ec;
 }
 
-.current-row .piece-slot.empty,
-.upcoming-row .piece-slot.empty {
+.current-row .piece-slot.empty {
   background: transparent;
-}
-
-.upcoming-row .piece-slot {
-  min-height: 48px;
-  opacity: 0.7;
 }
 
 .piece-slot svg {
   width: 100%;
   height: 100%;
-  max-width: 90px;
+  max-width: 110px;
 }
 
 .controls-row {

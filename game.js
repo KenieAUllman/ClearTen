@@ -6,15 +6,15 @@
  * just renders state to SVG/DOM and turns pointer input into calls into
  * the engine.
  *
- * LAYERED TOKEN RENDERING (V0.4)
+ * LAYERED TOKEN RENDERING (V0.5)
  * -------------------------------
  * A piece is drawn as one hex cell's worth of nested SVG groups:
  *
  *   <g class="piece-group" data-col data-slot>       -- position only
  *     <g class="piece-visual">                        -- pop-in scale only
- *       <circle class="layer-buried">  (deepest first, most offset)
- *       <circle class="layer-buried">  (closer, less offset)
- *       <circle class="layer-active">  (centered, full size, on top)
+ *       <circle class="layer-active">  (large, centered -- dominates)
+ *       <circle class="layer-pip">     (tiny, in a row underneath)
+ *       <circle class="layer-pip">     (next one over, in order)
  *
  * Position (piece-group) and effects (piece-visual's pop-in, or a
  * layer-active circle's own clearing/emphasize animation) are kept on
@@ -80,21 +80,24 @@
     return points.join(' ');
   }
 
-  // A layered piece's visual is a small stack of circles: the active
-  // (top) layer full-size and centered, each buried layer beneath it
-  // smaller and progressively offset along one diagonal -- deepest layer
-  // drawn first (most offset, most hidden), active layer drawn last
-  // (centered, on top of everything). The layer nearest the surface sits
-  // right next to the active circle, reading naturally as "what's next."
-  var LAYER_MAIN_RADIUS = HEX_SIZE * 0.68;
-  var LAYER_BURIED_RADIUS = HEX_SIZE * 0.5;
-  var LAYER_OFFSET_STEP = HEX_SIZE * 0.3;
+  // A layered piece's visual (V0.5, simplified after playtesting found the
+  // V0.4 overlapping-offset-circles treatment too visually messy): one
+  // large circle for the active color, dominating the cell, with tiny
+  // "pip" dots in a row underneath for whatever's buried -- left-to-right
+  // in order (leftmost = next color, rightmost = the one after that).
+  // Never more than 2 pips: this level limits pieces to 2-3 layers total.
+  var LAYER_MAIN_RADIUS = HEX_SIZE * 0.6;
+  var LAYER_PIP_RADIUS = HEX_SIZE * 0.11;
+  var LAYER_PIP_ROW_Y = LAYER_MAIN_RADIUS + LAYER_PIP_RADIUS + HEX_SIZE * 0.14;
+  var LAYER_PIP_SPACING = LAYER_PIP_RADIUS * 2 + HEX_SIZE * 0.08;
 
   function layerCircleSpecs(layers) {
+    var buriedCount = layers.length - 1;
     var specs = [];
-    for (var i = layers.length - 1; i >= 1; i--) {
-      var off = i * LAYER_OFFSET_STEP;
-      specs.push({ cx: off, cy: off, r: LAYER_BURIED_RADIUS, color: layers[i], active: false, layerIndex: i });
+    for (var i = 1; i < layers.length; i++) {
+      var pipIndex = i - 1;
+      var offsetFromCenter = (pipIndex - (buriedCount - 1) / 2) * LAYER_PIP_SPACING;
+      specs.push({ cx: offsetFromCenter, cy: LAYER_PIP_ROW_Y, r: LAYER_PIP_RADIUS, color: layers[i], active: false, layerIndex: i });
     }
     specs.push({ cx: 0, cy: 0, r: LAYER_MAIN_RADIUS, color: layers[0], active: true, layerIndex: 0 });
     return specs;
@@ -113,7 +116,7 @@
         cy: spec.cy,
         r: spec.r,
         fill: Config.COLORS[spec.color].hex,
-        class: 'layer-circle ' + (spec.active ? 'layer-active' : 'layer-buried'),
+        class: 'layer-circle ' + (spec.active ? 'layer-active' : 'layer-pip'),
         'data-layer-index': spec.layerIndex
       }));
     });
@@ -152,7 +155,6 @@
   var moveCountEl = document.getElementById('move-count');
   var levelNameEl = document.getElementById('level-name');
   var currentPiecesEl = document.getElementById('current-pieces');
-  var upcomingPiecesEl = document.getElementById('upcoming-pieces');
   var undoBtn = document.getElementById('undo-btn');
   var restartBtn = document.getElementById('restart-btn');
   var endOverlay = document.getElementById('end-overlay');
@@ -253,6 +255,10 @@
 
   // ---- Piece queue helpers -----------------------------------------------
 
+  // The hidden predetermined sequence beyond the 3 current pieces is
+  // intentionally never exposed to the player (no Upcoming preview in
+  // V0.5) -- the only visible future information comes from what's
+  // buried inside the 3 pieces already on offer.
   function drawNextPiece() {
     var sequence = currentLevel().pieceSequence;
     if (state.pieceIndex < sequence.length) {
@@ -261,11 +267,6 @@
       return piece;
     }
     return null; // supply exhausted
-  }
-
-  function upcomingPieces() {
-    var sequence = currentLevel().pieceSequence;
-    return sequence.slice(state.pieceIndex, state.pieceIndex + 2);
   }
 
   // ---- Rendering: board -----------------------------------------------------
@@ -425,19 +426,6 @@
       }
       currentPiecesEl.appendChild(slot);
     });
-
-    upcomingPiecesEl.innerHTML = '';
-    var upcoming = upcomingPieces();
-    for (var i = 0; i < 2; i++) {
-      var slot = document.createElement('div');
-      var piece = upcoming[i];
-      slot.className = 'piece-slot' + (piece ? '' : ' empty');
-      if (piece) {
-        slot.setAttribute('data-piece-id', piece.id);
-        slot.appendChild(renderPiecePreview(piece));
-      }
-      upcomingPiecesEl.appendChild(slot);
-    }
   }
 
   function renderTopBar() {
