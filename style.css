@@ -80,6 +80,35 @@ body {
   color: var(--ink);
 }
 
+/* ---------- Developer level select (V0.6) ----------
+   Deliberately plain/utilitarian -- a testing convenience, not a
+   player-facing feature. No stars, no world map, no progress bar. */
+
+.level-select {
+  display: flex;
+  gap: 6px;
+  padding: 0 20px 8px;
+}
+
+.level-select-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--board-tile-line);
+  background: var(--panel);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.level-select-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
 /* ---------- Board ---------- */
 
 .board-area {
@@ -93,8 +122,14 @@ body {
 }
 
 #board-svg {
-  width: 100%;
+  /* V0.6: aspect-ratio is set per-level from JS (loadLevelGeometry) so a
+     board much wider or taller than others still fills a comfortable
+     amount of the available area instead of rendering tiny inside a box
+     sized for a different shape. width/height stay as the two caps the
+     browser resolves the ratio against. */
+  width: auto;
   height: 100%;
+  max-width: 100%;
   max-height: 56vh;
   touch-action: manipulation;
   user-select: none;

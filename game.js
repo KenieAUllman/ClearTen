@@ -147,6 +147,12 @@
       h: (bounds.maxY - bounds.minY) + padding * 2
     };
     boardSvg.setAttribute('viewBox', viewBox.x + ' ' + viewBox.y + ' ' + viewBox.w + ' ' + viewBox.h);
+    // V0.6: five levels have five different board shapes (a wide hill, a
+    // tall spike, a twin-pocket gap...). Without this, a board much wider
+    // than tall (or vice versa) would render tiny inside a box sized for
+    // a different aspect ratio -- CSS aspect-ratio here lets each board
+    // claim as much of the available area as its own shape allows.
+    boardSvg.style.aspectRatio = viewBox.w + ' / ' + viewBox.h;
   }
 
   // ---- DOM references -------------------------------------------------------
@@ -163,6 +169,7 @@
   var introBanner = document.getElementById('intro-banner');
   var introBannerText = document.getElementById('intro-banner-text');
   var clearCallout = document.getElementById('clear-callout');
+  var levelSelectEl = document.getElementById('level-select');
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
   function svgEl(tag, attrs) {
@@ -244,12 +251,27 @@
     hideEndOverlay();
     renderAll();
     showIntroBannerIfNeeded();
+    if (DEBUG) {
+      var lvl = currentLevel();
+      console.log('[debug] level #' + (currentLevelIndex + 1) + '/' + Config.LEVELS.length + ' "' + lvl.name + '"');
+      console.log('[debug] current piece choices:', state.currentPieces.map(function (p) { return p ? p.id + ':' + p.layers.join('>') : null; }));
+      console.log('[debug] documented solution (' + lvl.solution.length + ' steps):', lvl.solution.map(function (s) { return s.pieceId + '@(' + s.target.col + ',' + s.target.slot + ')'; }).join(' -> '));
+    }
   }
 
   function goToNextLevel() {
     if (currentLevelIndex < Config.LEVELS.length - 1) {
       currentLevelIndex++;
     }
+    resetGame();
+  }
+
+  // Developer-only convenience for playtesting: jump straight to any
+  // level without clearing the ones before it. Not part of the intended
+  // player-facing progression (see renderLevelSelect / #level-select).
+  function goToLevel(index) {
+    if (index < 0 || index >= Config.LEVELS.length) return;
+    currentLevelIndex = index;
     resetGame();
   }
 
@@ -275,8 +297,26 @@
     renderBoard();
     renderPieces();
     renderTopBar();
+    renderLevelSelect();
     renderEndState();
     renderControls();
+  }
+
+  // Small, visually-modest developer convenience: jump directly to any of
+  // the 5 levels for testing. Rebuilt only when the level count or
+  // current index could have changed (resetGame), not on every render.
+  function renderLevelSelect() {
+    if (!levelSelectEl) return;
+    levelSelectEl.innerHTML = '';
+    Config.LEVELS.forEach(function (lvl, i) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'level-select-btn' + (i === currentLevelIndex ? ' active' : '');
+      btn.textContent = String(i + 1);
+      btn.title = lvl.name;
+      btn.addEventListener('click', function () { goToLevel(i); });
+      levelSelectEl.appendChild(btn);
+    });
   }
 
   // Tile elements are cached across renders so preview highlighting (which
@@ -432,7 +472,8 @@
     moveCountEl.textContent = state.moveCount;
     levelNameEl.textContent = currentLevel().name;
     if (DEBUG) {
-      levelNameEl.textContent += ' (queue: ' + state.pieceIndex + '/' + currentLevel().pieceSequence.length + ')';
+      levelNameEl.textContent += ' [#' + (currentLevelIndex + 1) + '/' + Config.LEVELS.length +
+        ', queue: ' + state.pieceIndex + '/' + currentLevel().pieceSequence.length + ']';
     }
   }
 

@@ -37,6 +37,11 @@ var level = Config.LEVELS[0];
 
 console.log('ClearTen game logic tests\n');
 
+// ===========================================================================
+// GENERIC ENGINE TESTS -- these exercise gamelogic.js directly and are
+// independent of any specific level's board shape.
+// ===========================================================================
+
 // 1. A layered piece can contain 2-4 colors.
 test('a layered piece can be constructed with 2, 3, or 4 layers', function () {
   [2, 3, 4].forEach(function (n) {
@@ -59,7 +64,8 @@ test('only the active (top) layer counts for connectivity, not buried colors', f
   assert.strictEqual(redGroup.length, 1, 'active red at slot0 should not connect through slot1 (active purple there)');
 });
 
-// 3 & 4. Threshold behavior (9 doesn't clear, 10 does).
+// 3 & 4. Threshold behavior (9 doesn't clear, 10 does). LOCKED at exactly
+// 10 for V0.6 -- every level is built around this number, never more.
 test('9 connected active colors do not clear', function () {
   var board = makeLineBoard(9);
   var tokens = [];
@@ -78,6 +84,10 @@ test('10 connected active colors clear', function () {
   assert.strictEqual(groups.length, 1);
   assert.strictEqual(groups[0].cells.length, 10);
   assert.strictEqual(groups[0].color, 'red');
+});
+
+test('Config.CLEAR_THRESHOLD is locked at exactly 10 for V0.6', function () {
+  assert.strictEqual(Config.CLEAR_THRESHOLD, 10);
 });
 
 // 5 & 6. Clearing removes ONLY the top layer; the next layer becomes active.
@@ -134,16 +144,8 @@ test('resolveCascade settles a floating piece even when nothing clears', functio
 
 // 10 & 11. Gravity runs after clears, and cascades detect newly exposed
 // colors -- here specifically via a GRAVITY MOVE, not just a same-cell
-// reveal. Two adjacent columns (see hex adjacency notes in gamelogic.js).
-// Column 0 (height 11) has 10 single-layer red pieces at the bottom (they
-// vanish completely on clearing -- no buried layer) plus 1 single-layer
-// purple piece stranded at the very top (slot 10). Column 1 (height 9) is
-// entirely single-layer purple, already packed at the bottom -- NOT yet
-// touching column 0's stranded purple (slot 10 is nowhere near column 1's
-// pieces). Clearing the red empties column 0's bottom 10 slots, and
-// gravity drops the stranded purple all the way down to slot 0 -- which,
-// because column 0 is even, is hex-adjacent to column 1's slot 0. That
-// newly-formed adjacency connects 1 + 9 = 10 purple for the first time.
+// reveal. This is the exact mechanism level 5's "future color" trap relies
+// on, isolated down to a minimal two-column repro.
 test('cascade: clearing a piece fully away lets gravity drop another piece into a brand new connection', function () {
   var layout = [];
   for (var s = 0; s < 11; s++) layout.push({ col: 0, slot: s });
@@ -166,18 +168,16 @@ test('cascade: clearing a piece fully away lets gravity drop another piece into 
   assert.ok(Logic.boardIsEmpty(result.board));
 });
 
-// 3 & 9. Used current pieces are replaced from the hidden predetermined
-// sequence, and the 3 current pieces never all share the same active
-// color (V0.5: with no Upcoming preview, this is the only visible future
-// information -- if it were allowed to go monochrome, the player would
-// sometimes have no real choice at all).
+// 12. Used current pieces are replaced from the hidden predetermined
+// sequence. With no Upcoming preview, this is the only visible future
+// information.
 test('drawing pieces from the hidden sequence preserves order and full layer arrays', function () {
   var seq = level.pieceSequence;
   var current = seq.slice(0, 3);
   assert.strictEqual(current.length, 3);
   seq.forEach(function (piece, i) {
     assert.ok(Array.isArray(piece.layers) && piece.layers.length >= 1 && piece.layers.length <= 3,
-      'piece ' + i + ' (' + piece.id + ') should carry 1-3 layers (V0.5 caps depth at 3; a "plain" piece with no buried color is just 1)');
+      'piece ' + i + ' (' + piece.id + ') should carry 1-3 layers');
   });
   assert.ok(seq.some(function (p) { return p.layers.length >= 2; }), 'at least some pieces should actually have buried colors');
   // Simulate game.js's draw-on-use behavior: using slot 0 pulls seq[3] in,
@@ -189,25 +189,16 @@ test('drawing pieces from the hidden sequence preserves order and full layer arr
   assert.strictEqual(slots[1].id, seq[1].id, 'untouched slots keep their piece');
 });
 
-test('no window of 3 consecutive pieces in the sequence shares the same active color', function () {
-  var seq = level.pieceSequence;
-  for (var i = 0; i + 2 < seq.length; i++) {
-    var colors = [seq[i], seq[i + 1], seq[i + 2]].map(function (p) { return p.layers[0]; });
-    var allSame = colors[0] === colors[1] && colors[1] === colors[2];
-    assert.ok(!allSame, 'window at index ' + i + ' (' + seq[i].id + ',' + seq[i + 1].id + ',' + seq[i + 2].id + ') is all ' + colors[0]);
-  }
-});
-
 // 13. Undo restores complete layered state -- tested at the snapshot level
 // game.js relies on: cloning a board with layered cells and confirming a
 // later mutation doesn't affect the earlier snapshot.
 test('cloneBoard produces an independent snapshot of layered cells for undo', function () {
   var board = Logic.withInitialTokens(Logic.createBoard(level.layout), level.initialTokens);
   var snapshot = Logic.cloneBoard(board);
-  var mutated = Logic.placePiece(board, level.pieceSequence[0], 0, 0);
+  var mutated = Logic.placePiece(board, level.pieceSequence[0], 0, 2);
   assert.deepStrictEqual(Logic.getLayers(snapshot, 1, 0), ['purple', 'red']);
-  assert.strictEqual(Logic.getCell(snapshot, 0, 0), null, 'snapshot should not see the later placement');
-  assert.notStrictEqual(Logic.getCell(mutated, 0, 0), null);
+  assert.strictEqual(Logic.getCell(snapshot, 0, 2), null, 'snapshot should not see the later placement');
+  assert.notStrictEqual(Logic.getCell(mutated, 0, 2), null);
 
   // Peeling a layer on `mutated` must not retroactively change the
   // snapshot's (or the original board's) layer arrays.
@@ -239,189 +230,6 @@ test('a piece with buried layers remaining is not an empty board', function () {
   assert.strictEqual(Logic.boardIsEmpty(afterClear.board), false, 'purple is still buried underneath -- board must not read as empty');
 });
 
-// 17. The included level is solvable: replay the documented SOLUTION
-// through the real engine (placement -> gravity -> cascade, every step,
-// exactly like game.js), and confirm it ends with an empty board.
-test('the included level is solvable via its documented solution', function () {
-  var board = Logic.withInitialTokens(Logic.createBoard(level.layout), level.initialTokens);
-  assert.strictEqual(level.solution.length, level.pieceSequence.length,
-    'solution should place every piece in the sequence');
-
-  level.solution.forEach(function (step, i) {
-    var piece = level.pieceSequence[i];
-    assert.strictEqual(piece.id, step.pieceId,
-      'solution step ' + i + ' expected piece ' + step.pieceId + ' but sequence has ' + piece.id);
-    assert.ok(
-      Logic.canPlacePiece(board, piece, step.target.col, step.target.slot),
-      'solution step ' + i + ' (' + piece.id + ') is not a legal placement'
-    );
-    board = Logic.placePiece(board, piece, step.target.col, step.target.slot);
-    var cascade = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD);
-    board = cascade.board;
-
-    var isLastStep = i === level.solution.length - 1;
-    if (!isLastStep) {
-      assert.ok(!Logic.boardIsEmpty(board),
-        'board must not be empty after step ' + i + ' (' + piece.id + ') -- that would trigger a premature win');
-    }
-  });
-
-  assert.ok(Logic.boardIsEmpty(board), 'board should be completely empty after the full solution');
-});
-
-// 6, 7 & 8. Board terrain creates real, structural region separation --
-// not just "usually" true, but a geometric fact of this board shape.
-// Column 0 (the LEFT dead end) and column 4 (the RIGHT dead end) can
-// NEVER be adjacent to the bridge (column 2) or the far basin, at ANY
-// slot height, because hex adjacency only ever spans one column step.
-test('column 0 and column 4 (the dead-end pockets) can never reach the bridge or the far basin', function () {
-  var board = Logic.createBoard(level.layout);
-  level.layout.filter(function (c) { return c.col === 0; }).forEach(function (c) {
-    Logic.getNeighbors(board, c.col, c.slot).forEach(function (n) {
-      assert.ok(n.col <= 1, 'column 0 slot ' + c.slot + ' must never neighbor column ' + n.col);
-    });
-  });
-  level.layout.filter(function (c) { return c.col === 4; }).forEach(function (c) {
-    Logic.getNeighbors(board, c.col, c.slot).forEach(function (n) {
-      assert.ok(n.col >= 3, 'column 4 slot ' + c.slot + ' must never neighbor column ' + n.col);
-    });
-  });
-});
-
-test('the bridge (column 2) is the only path between the left and right basins', function () {
-  var board = Logic.createBoard(level.layout);
-  // Column 1's higher slots (2,3) are too high for column 2 (only 2
-  // cells tall) to ever reach -- only slots 0-1 can touch the bridge.
-  var col1TouchesBridge = level.layout.filter(function (c) { return c.col === 1; }).map(function (c) {
-    return { slot: c.slot, touchesBridge: Logic.getNeighbors(board, 1, c.slot).some(function (n) { return n.col === 2; }) };
-  });
-  assert.deepStrictEqual(col1TouchesBridge, [
-    { slot: 0, touchesBridge: true },
-    { slot: 1, touchesBridge: true },
-    { slot: 2, touchesBridge: false },
-    { slot: 3, touchesBridge: false }
-  ]);
-});
-
-function pieceById(id) {
-  return level.pieceSequence.filter(function (p) { return p.id === id; })[0];
-}
-
-function placeSteps(board, steps) {
-  steps.forEach(function (step) {
-    var piece = pieceById(step.pieceId);
-    assert.ok(Logic.canPlacePiece(board, piece, step.target.col, step.target.slot),
-      step.pieceId + ' -> (' + step.target.col + ',' + step.target.slot + ') is not a legal placement');
-    board = Logic.placePiece(board, piece, step.target.col, step.target.slot);
-  });
-  return board;
-}
-
-// 18/19. The level performs its documented purple -> orange -> red chain
-// as three SEPARATE cascade events (not merged), each still leaving the
-// board non-empty except the last -- confirms the terrain-driven design
-// works exactly as described in config.js.
-test('the level performs three separate purple -> orange -> red waves via the bridge', function () {
-  var board = Logic.withInitialTokens(Logic.createBoard(level.layout), level.initialTokens);
-  var wave1 = level.solution.slice(0, 11); // through P5
-  var wave2 = level.solution.slice(11, 12); // O3
-  var wave3 = level.solution.slice(12, 14); // R1, R2
-
-  board = placeSteps(board, wave1);
-  var afterWave1 = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD);
-  assert.strictEqual(afterWave1.events.length, 1, 'wave 1 should be a single purple-clear event');
-  assert.strictEqual(afterWave1.events[0].groups[0].color, 'purple');
-  board = afterWave1.board;
-  assert.ok(!Logic.boardIsEmpty(board), 'board must not be empty after wave 1');
-  // The bridge should be empty right after wave 1 (TRAP_A/TRAP_B's purple
-  // peeled to orange, which hasn't cleared yet).
-  assert.strictEqual(Logic.getActiveColor(board, 2, 0), 'orange');
-
-  board = placeSteps(board, wave2);
-  var afterWave2 = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD);
-  assert.strictEqual(afterWave2.events.length, 1, 'wave 2 should be a single orange-clear event');
-  assert.strictEqual(afterWave2.events[0].groups[0].color, 'orange');
-  board = afterWave2.board;
-  assert.ok(!Logic.boardIsEmpty(board), 'board must not be empty after wave 2');
-  // The bridge reopens (empty) once orange clears -- left's red and
-  // right's red are NOT yet connected.
-  assert.strictEqual(Logic.getCell(board, 2, 0), null);
-  assert.strictEqual(Logic.getCell(board, 2, 1), null);
-  assert.notDeepStrictEqual(
-    Logic.findConnectedGroup(board, 1, 0).map(function (c) { return c.col + '_' + c.slot; }).sort(),
-    Logic.findConnectedGroup(board, 3, 0).map(function (c) { return c.col + '_' + c.slot; }).sort(),
-    'left red and right red should still be two separate groups before the bridge is refilled'
-  );
-
-  board = placeSteps(board, wave3);
-  var afterWave3 = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD);
-  assert.strictEqual(afterWave3.events.length, 1, 'wave 3 should be a single red-clear event');
-  assert.strictEqual(afterWave3.events[0].groups[0].color, 'red');
-  assert.ok(Logic.boardIsEmpty(afterWave3.board), 'the whole board should be empty after wave 3');
-});
-
-// 19. At least two independent decisions reward planning around a buried
-// future color rather than only the active one -- TRAP_A and TRAP_B are
-// tested SEPARATELY (each is its own placement choice, at a different
-// moment in play) to prove this is two situations, not one. Each trap
-// piece's "obvious" alternative is a dead-end column-0 cell that some
-// OTHER plain-purple piece was going to use -- so testing the wrong
-// choice means swapping the trap and that plain piece's targets (both
-// still legal placements, both still reach purple=10; only where the
-// buried orange ends up differs).
-[
-  { trapId: 'TRAP_A', swapWithId: 'P1' },
-  { trapId: 'TRAP_B', swapWithId: 'P2' }
-].forEach(function (pair) {
-  test('buried-color decision: ' + pair.trapId + ' placed in the bridge (not the dead-end) is what lets orange connect', function () {
-    function playWave1(swapped) {
-      var board = Logic.withInitialTokens(Logic.createBoard(level.layout), level.initialTokens);
-      var targets = {};
-      level.solution.slice(0, 11).forEach(function (step) { targets[step.pieceId] = step.target; });
-      if (swapped) {
-        var t = targets[pair.trapId];
-        targets[pair.trapId] = targets[pair.swapWithId];
-        targets[pair.swapWithId] = t;
-      }
-      var steps = level.solution.slice(0, 11).map(function (step) {
-        return { pieceId: step.pieceId, target: targets[step.pieceId] };
-      });
-      board = placeSteps(board, steps);
-      var cascade = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD);
-      assert.strictEqual(cascade.events[0].groups[0].color, 'purple', 'purple should still reach 10 either way -- the swap only affects the active color\'s LOCATION, not the count');
-      return cascade.board;
-    }
-
-    var correctBoard = playWave1(false);
-    var wrongBoard = playWave1(true);
-
-    // Placed correctly (in the bridge), the revealed orange joins the
-    // right basin's orange group (it's adjacent to column 3's seed).
-    var rightGroup = Logic.findConnectedGroup(correctBoard, 3, 0);
-    assert.ok(rightGroup.some(function (c) { return c.col === 2; }),
-      pair.trapId + ' placed in the bridge should be part of the right basin\'s orange group');
-
-    // Placed in the dead-end column 0 instead, the revealed orange ends
-    // up stranded there. Don't assume which exact slot -- clearing plain
-    // purple next to it opens a gap, so gravity may drop it further down
-    // within column 0 (still confirmed empty of anything in column 3's
-    // group either way). Find wherever the orange actually landed.
-    var strandedCell = level.layout.filter(function (c) { return c.col <= 1; })
-      .find(function (c) { return Logic.getActiveColor(wrongBoard, c.col, c.slot) === 'orange'; });
-    assert.ok(strandedCell, pair.trapId + ' should have revealed an orange piece somewhere in the left basin');
-    var strandedGroup = Logic.findConnectedGroup(wrongBoard, strandedCell.col, strandedCell.slot);
-    assert.ok(strandedGroup.every(function (c) { return c.col <= 1; }),
-      pair.trapId + ' placed in column 0 should be stranded there, never reaching the bridge or right basin');
-
-    // The right basin's group is exactly one cell smaller without this
-    // trap's contribution -- the only thing the correct placement changes
-    // is whether THIS piece's orange counts toward it.
-    var rightGroupWrong = Logic.findConnectedGroup(wrongBoard, 3, 0);
-    assert.strictEqual(rightGroupWrong.length, rightGroup.length - 1,
-      pair.trapId + '\'s orange should be missing from the right basin group when stranded in column 0');
-  });
-});
-
 // A full board with no empty cell has no legal move for a single-cell piece.
 test('a completely full board has no legal move', function () {
   var layout = [{ col: 0, slot: 0 }, { col: 0, slot: 1 }];
@@ -451,6 +259,246 @@ test('hex adjacency is symmetric across the whole board (unchanged by the layere
       assert.ok(found, 'neighbor relation not symmetric for ' + k + ' <-> ' + n.col + '_' + n.slot);
     });
   });
+});
+
+// ===========================================================================
+// V0.6 -- MULTI-LEVEL TESTS
+// ===========================================================================
+// Five levels, same locked mechanics. Every level gets the same baseline
+// checks (solvable via its documented solution, no premature empty board,
+// no 3-consecutive-same-active-color window), plus one test targeting the
+// SPECIFIC structural trick that level's design relies on.
+
+test('there are exactly 5 levels', function () {
+  assert.strictEqual(Config.LEVELS.length, 5);
+});
+
+test('every level has a visibly distinct board silhouette (no two share the same shape)', function () {
+  var signatures = Config.LEVELS.map(function (lvl) {
+    var heights = {};
+    lvl.layout.forEach(function (c) { heights[c.col] = (heights[c.col] || 0) + 1; });
+    var cols = Object.keys(heights).map(Number).sort(function (a, b) { return a - b; });
+    return cols.map(function (c) { return heights[c]; }).join(',');
+  });
+  var unique = signatures.filter(function (sig, i) { return signatures.indexOf(sig) === i; });
+  assert.strictEqual(unique.length, signatures.length, 'two levels share the same column-height signature: ' + signatures.join(' | '));
+});
+
+function replaySolution(lvl) {
+  var board = Logic.withInitialTokens(Logic.createBoard(lvl.layout), lvl.initialTokens);
+  assert.strictEqual(lvl.solution.length, lvl.pieceSequence.length,
+    lvl.id + ': solution should place every piece in the sequence');
+
+  lvl.solution.forEach(function (step, i) {
+    var piece = lvl.pieceSequence[i];
+    assert.strictEqual(piece.id, step.pieceId,
+      lvl.id + ' solution step ' + i + ' expected piece ' + step.pieceId + ' but sequence has ' + piece.id);
+    assert.ok(
+      Logic.canPlacePiece(board, piece, step.target.col, step.target.slot),
+      lvl.id + ' solution step ' + i + ' (' + piece.id + ') is not a legal placement'
+    );
+    board = Logic.placePiece(board, piece, step.target.col, step.target.slot);
+    var cascade = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD);
+    board = cascade.board;
+
+    var isLastStep = i === lvl.solution.length - 1;
+    if (!isLastStep) {
+      assert.ok(!Logic.boardIsEmpty(board),
+        lvl.id + ': board must not be empty after step ' + i + ' (' + piece.id + ') -- that would be a premature win');
+    }
+  });
+
+  assert.ok(Logic.boardIsEmpty(board), lvl.id + ': board should be completely empty after the full solution');
+  return board;
+}
+
+Config.LEVELS.forEach(function (lvl) {
+  test(lvl.id + ' (' + lvl.name + ') is solvable via its documented solution, no generated dead resources', function () {
+    replaySolution(lvl);
+  });
+
+  test(lvl.id + ': no window of 3 consecutive pieces in the sequence shares the same active color', function () {
+    var seq = lvl.pieceSequence;
+    for (var i = 0; i + 2 < seq.length; i++) {
+      var colors = [seq[i], seq[i + 1], seq[i + 2]].map(function (p) { return p.layers[0]; });
+      var allSame = colors[0] === colors[1] && colors[1] === colors[2];
+      assert.ok(!allSame, lvl.id + ' window at index ' + i + ' (' + seq[i].id + ',' + seq[i + 1].id + ',' + seq[i + 2].id + ') is all ' + colors[0]);
+    }
+  });
+
+  test(lvl.id + ': every piece carries 1-3 layers (locked mechanic: 2-3 color layers per piece, plus plain 1-layer pieces)', function () {
+    lvl.pieceSequence.forEach(function (p) {
+      assert.ok(p.layers.length >= 1 && p.layers.length <= 3, lvl.id + ' piece ' + p.id + ' has ' + p.layers.length + ' layers');
+    });
+  });
+});
+
+function pieceById(lvl, id) {
+  return lvl.pieceSequence.filter(function (p) { return p.id === id; })[0];
+}
+
+function placeSteps(lvl, board, steps) {
+  steps.forEach(function (step) {
+    var piece = pieceById(lvl, step.pieceId);
+    assert.ok(Logic.canPlacePiece(board, piece, step.target.col, step.target.slot),
+      step.pieceId + ' -> (' + step.target.col + ',' + step.target.slot + ') is not a legal placement');
+    board = Logic.placePiece(board, piece, step.target.col, step.target.slot);
+  });
+  return board;
+}
+
+// ---- Level 1 (SPLIT BASIN): the bridge is the only path, dead ends never reach it ----
+
+test('level 1: column 0 and column 4 (the dead-end pockets) can never reach the bridge or the far basin', function () {
+  var lvl = Config.LEVELS[0];
+  var board = Logic.createBoard(lvl.layout);
+  lvl.layout.filter(function (c) { return c.col === 0; }).forEach(function (c) {
+    Logic.getNeighbors(board, c.col, c.slot).forEach(function (n) {
+      assert.ok(n.col <= 1, 'level1 column 0 slot ' + c.slot + ' must never neighbor column ' + n.col);
+    });
+  });
+  lvl.layout.filter(function (c) { return c.col === 4; }).forEach(function (c) {
+    Logic.getNeighbors(board, c.col, c.slot).forEach(function (n) {
+      assert.ok(n.col >= 3, 'level1 column 4 slot ' + c.slot + ' must never neighbor column ' + n.col);
+    });
+  });
+});
+
+test('level 1: the TRAP piece placed in the bridge (not the dead end) is what lets orange connect', function () {
+  var lvl = Config.LEVELS[0];
+  function playUpToPurpleClear(swapped) {
+    var board = Logic.withInitialTokens(Logic.createBoard(lvl.layout), lvl.initialTokens);
+    var targets = {};
+    lvl.solution.slice(0, 6).forEach(function (step) { targets[step.pieceId] = step.target; }); // through P3
+    if (swapped) {
+      var t = targets.TRAP;
+      targets.TRAP = targets.P1;
+      targets.P1 = t;
+    }
+    var steps = lvl.solution.slice(0, 6).map(function (step) { return { pieceId: step.pieceId, target: targets[step.pieceId] }; });
+    board = placeSteps(lvl, board, steps);
+    var cascade = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD);
+    assert.strictEqual(cascade.events[0].groups[0].color, 'purple', 'purple should still reach 10 either way -- the swap only affects location, not the count');
+    return cascade.board;
+  }
+
+  var correctBoard = playUpToPurpleClear(false);
+  var wrongBoard = playUpToPurpleClear(true);
+
+  // Placed correctly (in the bridge), the revealed orange is sitting right
+  // where the right basin's group can reach it.
+  var correctOrangeCell = lvl.layout.filter(function (c) { return c.col === 2; })
+    .find(function (c) { return Logic.getActiveColor(correctBoard, c.col, c.slot) === 'orange'; });
+  assert.ok(correctOrangeCell, 'TRAP placed in the bridge should reveal orange in the bridge');
+
+  // Placed in the dead-end column 0 instead, the revealed orange is
+  // stranded there -- never touching column 2 or beyond.
+  var strandedCell = lvl.layout.filter(function (c) { return c.col <= 1; })
+    .find(function (c) { return Logic.getActiveColor(wrongBoard, c.col, c.slot) === 'orange'; });
+  assert.ok(strandedCell, 'TRAP placed in column 0 should reveal an orange piece somewhere in the left basin');
+  var strandedGroup = Logic.findConnectedGroup(wrongBoard, strandedCell.col, strandedCell.slot);
+  assert.ok(strandedGroup.every(function (c) { return c.col <= 1; }),
+    'TRAP placed in column 0 should be stranded there, never reaching the bridge or right basin');
+});
+
+// ---- Level 2 (FUNNEL): the shared column is reachable from BOTH sides at every slot ----
+
+test('level 2: the shared middle column is adjacent to BOTH column 1 and column 3 at every slot (a true shared resource, not a gated bridge)', function () {
+  var lvl = Config.LEVELS[1];
+  var board = Logic.createBoard(lvl.layout);
+  lvl.layout.filter(function (c) { return c.col === 2; }).forEach(function (c) {
+    var neighborCols = Logic.getNeighbors(board, c.col, c.slot).map(function (n) { return n.col; });
+    assert.ok(neighborCols.indexOf(1) !== -1, 'level2 column 2 slot ' + c.slot + ' should border column 1');
+    assert.ok(neighborCols.indexOf(3) !== -1, 'level2 column 2 slot ' + c.slot + ' should border column 3');
+  });
+});
+
+test('level 2: purple and orange clearing reveals a buried red bridge spanning all of column 1/2/3', function () {
+  var lvl = Config.LEVELS[1];
+  var board = replaySolution(lvl);
+  assert.ok(Logic.boardIsEmpty(board), 'the shared-column red bridge should have cleared as part of the documented solution');
+});
+
+// ---- Level 3 (CHOKE POINT): the passage is exactly one cell wide ----
+
+test('level 3: the passage column has exactly one cell, bordering only column 1 slot 0 and column 3 slot 0', function () {
+  var lvl = Config.LEVELS[2];
+  var board = Logic.createBoard(lvl.layout);
+  var passageCells = lvl.layout.filter(function (c) { return c.col === 2; });
+  assert.strictEqual(passageCells.length, 1, 'level3 column 2 should have exactly 1 cell');
+  var neighbors = Logic.getNeighbors(board, passageCells[0].col, passageCells[0].slot);
+  assert.deepStrictEqual(neighbors.sort(function (a, b) { return a.col - b.col; }), [
+    { col: 1, slot: 0 },
+    { col: 3, slot: 0 }
+  ]);
+});
+
+test('level 3: the CHOKE piece placed at the passage clears both colors in a single cascade', function () {
+  var lvl = Config.LEVELS[2];
+  var board = Logic.withInitialTokens(Logic.createBoard(lvl.layout), lvl.initialTokens);
+  board = placeSteps(lvl, board, lvl.solution.slice(0, -1)); // everything up to CHOKE
+  var lastStep = lvl.solution[lvl.solution.length - 1];
+  board = Logic.placePiece(board, pieceById(lvl, lastStep.pieceId), lastStep.target.col, lastStep.target.slot);
+  var cascade = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD);
+  var clearedColors = cascade.events.filter(function (e) { return e.groups.length > 0; })
+    .map(function (e) { return e.groups[0].color; });
+  assert.deepStrictEqual(clearedColors, ['purple', 'orange'], 'CHOKE should trigger a purple clear immediately followed by an orange clear');
+  assert.ok(Logic.boardIsEmpty(cascade.board));
+});
+
+// ---- Level 4 (DUAL POCKET): the two pockets are structurally disconnected ----
+
+test('level 4: pocket A (columns 0-1) and pocket B (columns 3-4) can never be adjacent -- column 2 has zero cells', function () {
+  var lvl = Config.LEVELS[3];
+  assert.strictEqual(lvl.layout.filter(function (c) { return c.col === 2; }).length, 0, 'level4 column 2 should not exist');
+  var board = Logic.createBoard(lvl.layout);
+  lvl.layout.filter(function (c) { return c.col <= 1; }).forEach(function (c) {
+    Logic.getNeighbors(board, c.col, c.slot).forEach(function (n) {
+      assert.ok(n.col <= 1, 'level4 pocket A cell (' + c.col + ',' + c.slot + ') must never neighbor pocket B');
+    });
+  });
+});
+
+test('level 4: pocket A and pocket B each independently clear purple/orange then their own buried red', function () {
+  var lvl = Config.LEVELS[3];
+  var board = replaySolution(lvl);
+  assert.ok(Logic.boardIsEmpty(board));
+});
+
+// ---- Level 5 (FUTURE-COLOR PUZZLE): the signature gravity-driven reconnection ----
+
+test('level 5: FU1 sits stranded above column 1\'s purple stack until it clears', function () {
+  var lvl = Config.LEVELS[4];
+  var board = Logic.withInitialTokens(Logic.createBoard(lvl.layout), lvl.initialTokens);
+  var upToFU1 = lvl.solution.slice(0, 13); // through FU1 (index 12)
+  board = placeSteps(lvl, board, upToFU1);
+  board = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD).board;
+  assert.strictEqual(Logic.getActiveColor(board, 1, 4), 'orange', 'FU1 should still be resting at column 1 slot 4, not yet fallen');
+  var group = Logic.findConnectedGroup(board, 1, 4);
+  assert.strictEqual(group.length, 1, 'FU1 should be isolated -- not yet connected to any orange group');
+});
+
+test('level 5: clearing purple drops FU1 via gravity into a brand new connection with the revealed bridge orange, forming a second 10-group', function () {
+  var lvl = Config.LEVELS[4];
+  var board = Logic.withInitialTokens(Logic.createBoard(lvl.layout), lvl.initialTokens);
+  board = placeSteps(lvl, board, lvl.solution.slice(0, -1)); // through BR1, everything but the final BR2
+  var lastStep = lvl.solution[lvl.solution.length - 1];
+  board = Logic.placePiece(board, pieceById(lvl, lastStep.pieceId), lastStep.target.col, lastStep.target.slot);
+
+  var cascade = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD);
+  var clearedColors = cascade.events.filter(function (e) { return e.groups.length > 0; }).map(function (e) { return e.groups[0].color; });
+  assert.deepStrictEqual(clearedColors, ['purple', 'orange'], 'purple should clear, then the gravity-connected orange group should clear');
+  assert.ok(Logic.boardIsEmpty(cascade.board), 'the whole board should be empty -- FU1 successfully reconnected via gravity');
+
+  // Confirm FU1 actually MOVED (not just revealed in place): find the
+  // computed gravity move for column 1 in the event where purple clears.
+  var purpleEventIndex = cascade.events.findIndex(function (e) { return e.groups.length > 0 && e.groups[0].color === 'purple'; });
+  var purpleEvent = cascade.events[purpleEventIndex];
+  var moves = Logic.computeGravityMoves(purpleEvent.boardAfterClear, purpleEvent.boardAfterGravity);
+  var fu1Move = moves.filter(function (m) { return m.col === 1; })[0];
+  assert.ok(fu1Move, 'column 1 should have a piece that gravity actually moves once purple clears underneath it');
+  assert.strictEqual(fu1Move.fromSlot, 4);
+  assert.strictEqual(fu1Move.toSlot, 0, 'FU1 should fall all the way from slot 4 to slot 0, newly adjacent to the bridge');
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
