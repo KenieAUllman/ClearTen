@@ -279,13 +279,15 @@
     return { board: next, clearedCount: clearedCount, revealed: revealed };
   }
 
-  // Gravity: within each column independently, compact all occupied cells
-  // toward slot 0 (the bottom), preserving their relative top-to-bottom
-  // order. A layered piece moves as a single indivisible unit -- gravity
-  // relocates the whole { layers } object, so its buried colors can never
-  // separate from it. Columns never interact with each other -- this is
-  // the "consistent, predictable, deterministic" definition of down for
-  // this prototype.
+  // SETTLE GRAVITY (the original, still-default gravity mode -- V0.8 adds
+  // a second mode, STEP GRAVITY, below). Within each column independently,
+  // compact all occupied cells toward slot 0 (the bottom), preserving
+  // their relative top-to-bottom order, ALL THE WAY to their final
+  // resting position in one call. A layered piece moves as a single
+  // indivisible unit -- gravity relocates the whole { layers } object, so
+  // its buried colors can never separate from it. Columns never interact
+  // with each other -- this is the "consistent, predictable,
+  // deterministic" definition of down for this prototype.
   function applyGravity(board) {
     var next = cloneBoard(board);
     Object.keys(board.columnSlots).forEach(function (colStr) {
@@ -301,11 +303,117 @@
     return next;
   }
 
-  // Settles a board after a placement: gravity ALWAYS runs first (any
-  // newly placed piece, or any previously-supported piece left dangling by
-  // an earlier change, drops to the bottom of its column), and only then do
-  // we check for qualifying groups. This must happen even when nothing
-  // ends up clearing -- gravity is not conditional on a clear occurring.
+  // STEP GRAVITY (V0.8). Unlike Settle Gravity, this moves each
+  // unsupported piece down by exactly ONE slot within its own column --
+  // never all the way to the floor. "Unsupported" is decided entirely
+  // from the board passed in (a single fixed snapshot), never from
+  // in-progress results of this same call: a piece is unsupported if the
+  // next slot down in its own column (per that column's own sorted slot
+  // list -- see createBoard) is empty in the SNAPSHOT. Reading only the
+  // snapshot is what makes this deterministic and collision-free without
+  // needing any special-case conflict resolution: two pieces in the same
+  // column can never both target the same slot, because a piece sitting
+  // directly above another is, by definition, supported (its neighbor
+  // below is occupied in the snapshot) and simply does not move that
+  // turn -- it waits for the piece below it to move away first, then
+  // becomes unsupported on a LATER call. This is an ordinary "conga line"
+  // fall, one link per turn, and different columns never interact with
+  // each other at all, so there is no cross-column conflict to resolve
+  // either. A piece that's two gaps above its support only closes ONE of
+  // those gaps per call -- multi-gap columns take multiple turns to fully
+  // settle, which is the intended "travels through the board over several
+  // turns" behavior.
+  function applyStepGravity(board) {
+    var next = cloneBoard(board);
+    Object.keys(board.columnSlots).forEach(function (colStr) {
+      var col = Number(colStr);
+      var slots = board.columnSlots[col];
+      for (var i = 1; i < slots.length; i++) {
+        var slot = slots[i];
+        if (!isOccupied(board, col, slot)) continue;
+        var belowSlot = slots[i - 1];
+        if (!isOccupied(board, col, belowSlot)) {
+          setCell(next, col, belowSlot, getCell(board, col, slot));
+          setCell(next, col, slot, null);
+        }
+      }
+    });
+    return next;
+  }
+
+  // Runs one full STEP GRAVITY player turn in the exact order V0.8
+  // specifies (documented at length because it's the one place Step
+  // Gravity differs from a simple "call applyStepGravity instead of
+  // applyGravity" swap):
+  //   1. Check the board AS PLACED (no movement yet) for any qualifying
+  //      group and clear it if one already exists -- a piece can complete
+  //      a group by landing directly in a connected spot, with no falling
+  //      required, exactly as under Settle Gravity.
+  //   2. Exactly ONE call to applyStepGravity -- every unsupported piece
+  //      advances by exactly one slot. This is the ONLY movement in the
+  //      whole turn.
+  //   3. Check for newly-qualifying groups created by that one step, and
+  //      run the ordinary peel -> reveal -> peel cascade loop to a fixed
+  //      point -- but WITHOUT calling applyStepGravity again. A reveal
+  //      that empties a cell leaves whatever was above it merely
+  //      unsupported; it advances on the PLAYER'S NEXT TURN, not later in
+  //      this same cascade. This is the deliberate rule that keeps
+  //      movement tied to player turns instead of cascades ever
+  //      triggering extra, unrequested movement.
+  // Returns the same {board, events} shape resolveCascade does, so the UI
+  // layer can animate either gravity mode's events identically.
+  function resolveCascadeStepGravity(board, threshold) {
+    var events = [];
+    var current = board;
+
+    function drainClears() {
+      while (true) {
+        var groups = findAllQualifyingGroups(current, threshold);
+        if (groups.length === 0) break;
+        var clearResult = clearGroups(current, groups);
+        events.push({
+          groups: groups,
+          clearedCount: clearResult.clearedCount,
+          revealed: clearResult.revealed,
+          boardBeforeGravity: current,
+          boardAfterClear: clearResult.board,
+          boardAfterGravity: clearResult.board
+        });
+        current = clearResult.board;
+      }
+    }
+
+    // 1. Immediate clear(s) on the as-placed board, before any movement.
+    drainClears();
+
+    // 2. Exactly one step of gravity.
+    var stepped = applyStepGravity(current);
+    if (!boardsEqual(current, stepped)) {
+      events.push({
+        groups: [],
+        clearedCount: 0,
+        revealed: [],
+        boardBeforeGravity: current,
+        boardAfterClear: current,
+        boardAfterGravity: stepped
+      });
+    }
+    current = stepped;
+
+    // 3. Cascade from that one step, with no further movement.
+    drainClears();
+
+    return { board: current, events: events };
+  }
+
+  // Settles a board after a placement using SETTLE GRAVITY: gravity
+  // ALWAYS runs first (any newly placed piece, or any previously-supported
+  // piece left dangling by an earlier change, drops to the bottom of its
+  // column), and only then do we check for qualifying groups. This must
+  // happen even when nothing ends up clearing -- gravity is not
+  // conditional on a clear occurring. (For STEP GRAVITY levels, use
+  // resolveCascadeStepGravity above instead -- it follows a different,
+  // V0.8-specified turn order.)
   //
   // After that initial settle, this repeats peel -> gravity -> peel -> ...
   // until no more groups qualify. `events` records each step (plus the
@@ -412,7 +520,9 @@
     findAllQualifyingGroups: findAllQualifyingGroups,
     clearGroups: clearGroups,
     applyGravity: applyGravity,
+    applyStepGravity: applyStepGravity,
     resolveCascade: resolveCascade,
+    resolveCascadeStepGravity: resolveCascadeStepGravity,
     computeGravityMoves: computeGravityMoves,
     boardIsEmpty: boardIsEmpty,
     occupiedCellCount: occupiedCellCount

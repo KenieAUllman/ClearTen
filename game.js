@@ -162,6 +162,7 @@
   var boardSvg = document.getElementById('board-svg');
   var moveCountEl = document.getElementById('move-count');
   var levelNameEl = document.getElementById('level-name');
+  var gravityModeEl = document.getElementById('gravity-mode');
   var currentPiecesEl = document.getElementById('current-pieces');
   var undoBtn = document.getElementById('undo-btn');
   var restartBtn = document.getElementById('restart-btn');
@@ -255,7 +256,7 @@
     showIntroBannerIfNeeded();
     if (DEBUG) {
       var lvl = currentLevel();
-      console.log('[debug] level #' + (currentLevelIndex + 1) + '/' + Config.LEVELS.length + ' "' + lvl.name + '"');
+      console.log('[debug] level #' + (currentLevelIndex + 1) + '/' + Config.LEVELS.length + ' "' + lvl.name + '" gravityMode=' + (lvl.gravityMode || 'settle'));
       console.log('[debug] current piece choices:', state.currentPieces.map(function (p) { return p ? p.id + ':' + p.layers.join('>') : null; }));
       console.log('[debug] documented solution (' + lvl.solution.length + ' steps):', lvl.solution.map(function (s) { return s.pieceId + '@(' + s.target.col + ',' + s.target.slot + ')'; }).join(' -> '));
     }
@@ -473,6 +474,11 @@
   function renderTopBar() {
     moveCountEl.textContent = state.moveCount;
     levelNameEl.textContent = currentLevel().name;
+    // V0.8: which gravity mode is active is real gameplay information (the
+    // player needs to know whether a piece will settle instantly or take
+    // several turns to descend), so this shows in normal play, not just
+    // DEBUG -- unlike the debug-only details appended below.
+    gravityModeEl.textContent = currentLevel().gravityMode === 'step' ? 'Step Gravity' : 'Settle Gravity';
     if (DEBUG) {
       levelNameEl.textContent += ' [#' + (currentLevelIndex + 1) + '/' + Config.LEVELS.length +
         ', queue: ' + state.pieceIndex + '/' + currentLevel().pieceSequence.length + ']';
@@ -708,7 +714,15 @@
   // final result and the win/loss check run -- Undo relies on state.board
   // never reflecting an in-between animation frame.
   function runGravityAndCascadeThenCheckEnd() {
-    var cascade = Logic.resolveCascade(state.board, Config.CLEAR_THRESHOLD);
+    // V0.8: STEP GRAVITY levels use a different, V0.8-specified turn
+    // order (see resolveCascadeStepGravity in gamelogic.js) -- an
+    // immediate clear check, then exactly ONE step of movement per turn,
+    // then a clear/reveal cascade with no further movement. Both
+    // functions return the same {board, events} shape, so everything
+    // below (animation, end-check) is identical either way.
+    var cascade = currentLevel().gravityMode === 'step'
+      ? Logic.resolveCascadeStepGravity(state.board, Config.CLEAR_THRESHOLD)
+      : Logic.resolveCascade(state.board, Config.CLEAR_THRESHOLD);
     if (cascade.events.length === 0) {
       checkEndConditions();
       return;

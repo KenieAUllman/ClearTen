@@ -70,6 +70,13 @@ body {
   font-weight: 600;
 }
 
+.top-bar-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
 .move-count {
   font-size: 14px;
   color: var(--ink-soft);
@@ -78,6 +85,17 @@ body {
 #move-count {
   font-weight: 600;
   color: var(--ink);
+}
+
+/* V0.8: which gravity mode is active is real gameplay information (a
+   piece either settles instantly or takes several turns to descend), so
+   it's shown plainly in normal play -- not a debug-only detail. */
+.gravity-mode {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
 
 /* ---------- Developer level select (V0.6) ----------

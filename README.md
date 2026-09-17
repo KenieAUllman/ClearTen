@@ -1,22 +1,22 @@
-# ClearTen (prototype v0.7)
+# ClearTen (prototype v0.8)
 
 A browser-based prototype of a mobile strategy puzzle game. The goal of
 this build is **only** to test whether the core mechanic is fun -- it is
 not a finished product. No accounts, ads, sound, procedural levels, or
 monetization.
 
-**V0.7 does not change a single rule.** V0.6 proved the core mechanic
-could carry five distinct puzzles using split/separated boards (a short
-bridge, a shared column, a one-cell gate, disconnected pockets). This
-version asks a sharper question: can the SAME mechanics produce genuine
-"I SEE IT NOW" moments on boards that are mostly **one continuous mass**,
-without leaning on structural separation as the trick? Colors, the clear
-threshold (still exactly 10), piece layering, gravity, and win/loss
-conditions are all identical to V0.6. What changed: **five brand-new
-levels** built around discoverable insights rather than terrain gating,
-and **Undo is no longer part of normal play** -- a meaningful mistake now
-costs a Restart, not a free rewind (Undo still exists internally and is
-reachable in debug mode).
+**V0.8 adds exactly one new dimension: pieces can move THROUGH the board
+over time.** V0.7 playtesting found that even with varied board shapes,
+most levels reduced to the same question -- "which column?" -- because
+Settle Gravity resolves a placement instantly. This version adds a second
+gravity mode, **Step Gravity**, where an unsupported piece advances
+exactly one hex position per player turn instead of falling straight to
+its final resting spot. Everything else is locked: colors, the clear
+threshold (still exactly 10), piece layering, buried-color reveals,
+full-board-clear victory, irregular board shapes, Restart, and no
+player-facing Undo are all unchanged from V0.7. The original gravity is
+now called **Settle Gravity** internally, and one level (the control)
+still uses it, purely for comparison.
 
 ## HOW TO PLAY
 
@@ -29,11 +29,15 @@ reachable in debug mode).
   slot.
 - **Tap a current piece** to select it, then **tap any empty board cell**
   to place it there.
-- **Gravity**: after every placement, every piece that can fall does --
-  straight down, within its own column, as one indivisible unit. A
-  column's occupied cells always compact toward its own floor, in the
-  order they were placed -- clicking a cell higher up just means the
-  piece falls to the next open slot below it.
+- **Gravity mode** is shown in the top-right corner of every level:
+  - **Settle Gravity** (the original behavior): after every placement,
+    every unsupported piece falls all the way to its final resting
+    position, instantly, straight down within its own column.
+  - **Step Gravity** (new in V0.8): after every placement, every
+    unsupported piece advances by exactly **one** hex position -- no
+    further. A piece dropped near the top of a tall column takes several
+    turns (one per placement anywhere on the board, not just in that
+    column) to actually arrive at the bottom. Watch it travel.
 - **Clearing**: whenever 10 or more pieces with the *same active color*
   are connected, that whole group's **top layer only** clears, revealing
   whatever was buried underneath. A newly revealed color can immediately
@@ -45,30 +49,10 @@ reachable in debug mode).
 - **You lose** if cells remain occupied and no current piece can legally
   be placed.
 - **Restart** resets the level you're currently on. **Undo is not
-  available in normal play this version** -- a bad placement is a real
-  cost, not something to casually rewind. (It's still there under the
-  hood for debugging; see DEBUG MODE below.)
+  available in normal play** -- a bad placement is a real cost. (It's
+  still there under the hood for debugging; see DEBUG MODE below.)
 - A small row of numbered buttons under the title bar (**1 2 3 4 5**) is a
   developer convenience for jumping straight to any level while testing.
-  It's deliberately plain -- not part of the intended play experience.
-
-## THE FIVE LEVELS
-
-See **LEVEL DESIGN REPORT** below for the concept/insight/mistake/solution
-for each one. All five are hand-authored (not procedural) and verified
-end-to-end by `tests.js`: the documented solution is replayed through the
-real engine and confirmed to empty the board without ever doing so early,
-AND the documented tempting mistake is separately replayed and confirmed
-to leave the board **unsolvable** -- the temptation is a real trap, not
-just narrated.
-
-At least 3 of the 5 boards are **one continuous connected mass** -- no
-structural cut anywhere on them at all (verified: every cell is reachable
-from every other cell via hex adjacency, ignoring color). The difficulty
-comes entirely from WHICH cell a buried color ends up in, WHETHER a
-completing piece's surroundings are ready yet, and WHERE gravity will
-carry a piece once something clears beneath it -- not from a board that's
-impossible to read or from extra pieces/colors.
 
 ## HOW TO RUN IT
 
@@ -89,179 +73,213 @@ Then open `http://localhost:8000` in your browser.
 
 ## PROJECT FILES
 
-- `index.html` -- page structure, including the small `#level-select` row
-  and a debug-only Undo button (hidden unless `DEBUG = true`).
+- `index.html` -- page structure, including the small `#level-select` row,
+  the gravity-mode indicator, and a debug-only Undo button (hidden unless
+  `DEBUG = true`).
 - `style.css` -- all visual styling.
 - `gamelogic.js` -- the pure game engine (hex grid, adjacency, layered
-  pieces, gravity, clearing, cascades). No UI code, no rendering. Runs
-  identically in the browser and in Node. **Unchanged since V0.4.**
+  pieces, clearing, cascades). No UI code, no rendering. Runs identically
+  in the browser and in Node. **V0.8 adds `applyStepGravity` and
+  `resolveCascadeStepGravity`** alongside the original (now documented as
+  "SETTLE GRAVITY") `applyGravity`/`resolveCascade` -- both coexist, and
+  every function from V0.4-V0.7 is unchanged.
 - `config.js` -- everything that defines the puzzles: colors, the clear
-  threshold, a `layoutFromColumns` helper (V0.7: lets each column have its
-  own floor as well as height, for genuinely irregular continuous
-  boards), and a `LEVELS` array of **5 levels**, each with its board
-  shape, piece sequence, verified solution, and design-rationale comments
-  covering the key insight and the tempting mistake.
+  threshold, `layoutFromColumns` (lets each column have its own floor as
+  well as height), and a `LEVELS` array of **5 levels**, each declaring a
+  `gravityMode` (`'settle'` or `'step'`, defaulting to `'settle'` if
+  omitted) plus its board shape, piece sequence, verified solution, and
+  design-rationale comments covering the key insight and the tempting
+  mistake.
 - `game.js` -- the browser UI: rendering, input handling, restart,
   win/loss detection, animation timing, level navigation, the developer
-  level selector, and (V0.7) an internally-preserved but normally-hidden
-  Undo.
-- `tests.js` -- automated tests for `gamelogic.js` and every level in
-  `config.js`, including a mistake-replay test per level, runnable with
-  `node tests.js` (no framework, no npm install).
+  level selector, the gravity-mode indicator, and an
+  internally-preserved but normally-hidden Undo. `runGravityAndCascadeThenCheckEnd`
+  picks `resolveCascadeStepGravity` or `resolveCascade` based on the
+  current level's `gravityMode` -- everything downstream (animation,
+  win/loss checking) is identical either way, since both functions return
+  the same `{board, events}` shape.
+- `tests.js` -- automated tests for `gamelogic.js` (including Step
+  Gravity's engine mechanics directly) and every level in `config.js`,
+  including a mistake-replay test per level, runnable with `node tests.js`
+  (no framework, no npm install).
 
 ## DEVELOPER NOTES
 
-- **The layered data model, gravity-moves-a-whole-piece behavior, and the
-  clear threshold (exactly 10)** are all unchanged from V0.4-V0.6. See
-  `gamelogic.js`'s file header for the full explanation.
-- **Continuous boards via `layoutFromColumns`**: V0.6's levels used a
-  too-short (or height-0) column to structurally CUT a board into
-  separate regions. V0.7 mostly avoids that -- `layoutFromColumns` lets
-  each column keep its own contiguous slot range starting at any FLOOR,
-  which is enough to build a bowl, a staircase, a tower, or an asymmetric
-  skyline that stays fully connected end to end. Levels 1-3 and 5 are (or
-  are almost entirely) one continuous mass; only a couple of small,
-  deliberately placed decoy/pocket regions in Levels 3 and 5 are
-  color-isolated on purpose (see their design notes in `config.js`).
-- **Every level was designed backward from a known solved state** using a
-  Node sandbox harness that replays a hand-built solution through the
-  real engine before committing to it. This process caught real design
-  bugs: an early version of Level 1's trap piece turned out to be
-  rescuable by gravity no matter where it was placed (column 1's floor
-  happened to touch the seam too); an early Level 2 mistake test turned
-  out to be recoverable because a later piece re-chained the stranded one
-  through the same column. Both were only caught by actually running the
-  mistake through the engine, not by reasoning about it -- which is why
-  `tests.js` replays the documented mistake for every level, not just the
-  documented solution.
-- **Debug mode**: set `DEBUG = true` near the top of `game.js` to show,
-  per cell, its `(col, slot)`, full layer sequence, and connected-group
-  size; every legal placement cell for the selected piece; the current
-  level number and hidden-sequence queue position in the title bar;
-  the current piece choices and full documented solution logged to the
-  console on every level load; and **the Undo button**, which is hidden
-  from normal play this version but fully functional underneath (the
-  history stack and `onUndo` were never removed -- only `renderControls`
-  now gates the button's visibility on `DEBUG`).
-- **The developer level selector** is intentionally plain -- small
-  numbered buttons, no icons, no completion state beyond which one is
-  active. Purely a testing convenience.
-- **A real SVG gotcha worth knowing about** (carried over from V0.4-V0.6,
-  still relevant): pieces render as nested `<g>` elements because setting
-  `el.style.transform = 'translate(x,y)'` on an SVG element silently does
-  nothing without an explicit unit -- `px` is required, and on an SVG
-  element it resolves to one local coordinate-system unit, not a screen
-  pixel.
+### Step Gravity: the exact turn order
 
-## LEVEL DESIGN REPORT
+Per player turn, once a piece is placed:
 
-### LEVEL 1: Deceptive Simple
-**BOARD CONCEPT:** A symmetric bowl, one continuous board (floors
-`[2,1,0,1,2]`, heights `[3,4,5,4,3]`) -- every cell reachable from every
-other cell. Columns 1 and 3 are pre-filled (purple/orange); the player
-fills column 0, column 4, and the bowl's floor (column 2).
-**KEY INSIGHT:** `TRAP` is a `[purple, orange]` piece. All three of
-column 2's purple cells also border column 3's orange -- it isn't about
-finding one exact magic cell, it's about recognizing that the bowl's
-FLOOR (not the flanks) is where a buried color pays off.
-**TEMPTING MISTAKE:** Placing TRAP in a flank cell instead of the floor.
-Verified: this leaves orange permanently stuck at 9/10.
-**EXPECTED DIFFICULTY:** Medium (gentle, introductory).
-**VERIFIED SOLUTION:** 8 placements; documented in `config.js` as
-`level1.solution`. `tests.js` replays both the solution and the mistake.
+1. **Immediate clear check** on the board exactly as placed (no movement
+   yet) -- a piece can complete a group by landing directly in a
+   connected spot, same as Settle Gravity.
+2. **Exactly one call to `applyStepGravity`** -- every unsupported piece
+   (the slot below it, in its own column, is empty) advances by
+   precisely one slot. This is the *only* movement in the whole turn.
+3. **Cascade**: check for newly-qualifying groups created by that one
+   step, clear/reveal/re-check to a fixed point -- but **without** calling
+   `applyStepGravity` again. A reveal that empties a cell leaves whatever
+   was above it merely unsupported; it advances on the player's *next*
+   turn, not later in this same cascade. This is deliberate: movement
+   stays tied to player turns, never to cascades, so it can never run
+   away or repeat unexpectedly (verified in `tests.js`).
 
-### LEVEL 2: Delay the Clear
-**BOARD CONCEPT:** A smooth 5-column rising staircase, one continuous
-board. Columns 0-1 (purple) and columns 3-4 (orange) each need one more
-cell; that tenth cell for BOTH colors lives in column 2, whose lower 3
-cells are orange support and whose top cell is `DELAY`, a `[purple,
-orange]` piece.
-**KEY INSIGHT:** Column 2's cells look like generic empty space -- any
-piece could go there. But DELAY only stays at the top (where it touches
-column 3) if the support cells beneath it are occupied by something that
-ISN'T also clearing in the same event as purple. Route purple to columns
-0-1 and keep column 2's lower cells orange; don't spend purple pieces
-there just because it's open space.
-**TEMPTING MISTAKE:** Using plain purple pieces on column 2's support
-cells (rerouting the spare orange pieces into column 1 instead).
-Verified: DELAY ends up isolated from the rest of purple's own group, and
-the board is permanently unsolvable even though the raw color counts
-still add up to 10.
-**EXPECTED DIFFICULTY:** Medium.
-**VERIFIED SOLUTION:** 19 placements; `level2.solution` in `config.js`.
+### Why this resolution order is deterministic (no movement conflicts)
 
-### LEVEL 3: Gravity Routing
-**BOARD CONCEPT:** An asymmetric continuous board -- a tall orange target
-(column 0) beside two identical-looking purple stacks: column 1
-(adjacent) and column 2 (floor 2, two columns from column 0).
-**KEY INSIGHT:** Both stacks are the same height, same shape, same
-colors, and both LOOK equally promising. Hex adjacency only ever spans
-one column step, so column 2 can never reach column 0 no matter how it's
-stacked or how gravity settles it. The insight is recognizing WHICH
-column is even structurally capable of this, when both look identical.
-**TEMPTING MISTAKE:** Placing the buried-orange `ROUTE` piece in column 2
-instead of column 1. Verified: both colors end up permanently short.
-**EXPECTED DIFFICULTY:** Medium-hard.
+Step Gravity decides which pieces are "unsupported" entirely from a
+single snapshot of the board taken before that turn's movement -- never
+from in-progress results of the same call. Concretely: a piece with an
+empty slot below it (in its own column, in the snapshot) moves down one
+slot; everything else stays. This makes conflicts structurally
+impossible without any special-case rule: a piece sitting directly above
+another is, by definition, supported (something is still below it in the
+snapshot) and does not move that turn -- it waits for the piece below it
+to move away first, then becomes unsupported on a *later* turn. It's an
+ordinary "conga line" fall, one link closing per turn. Different columns
+never interact with each other at all (movement is strictly vertical,
+within a column, exactly like Settle Gravity), so there's no cross-column
+case to resolve either. The player can always predict it: count how many
+empty slots are directly below a piece, in its own column, right now --
+that's exactly how many more turns (of placements ANYWHERE on the board,
+not just that column) it will take to land.
+
+### Animation
+
+Step Gravity reuses the exact same `animateFall`/`computeGravityMoves`
+machinery Settle Gravity already used -- a one-slot move is just a
+shorter, quicker version of the same falling animation, so it reads as
+"this piece advanced" rather than "the board reset." No new animation
+code was needed.
+
+### Debug mode
+
+Set `DEBUG = true` near the top of `game.js` to show, per cell, its
+`(col, slot)`, full layer sequence, and connected-group size; every legal
+placement cell for the selected piece; the current level number,
+gravity mode, and hidden-sequence queue position; the current piece
+choices and full documented solution logged to the console on every
+level load; and **the Undo button**, hidden from normal play but fully
+functional underneath.
+
+### A real SVG gotcha worth knowing about
+
+(Carried over from V0.4-V0.7, still relevant): pieces render as nested
+`<g>` elements because setting `el.style.transform = 'translate(x,y)'` on
+an SVG element silently does nothing without an explicit unit -- `px` is
+required, and on an SVG element it resolves to one local
+coordinate-system unit, not a screen pixel.
+
+## V0.8 LEVEL DESIGN REPORT
+
+### LEVEL 1: Control
+**GRAVITY MODE:** Settle.
+**BOARD CONCEPT:** A tower + decoy puzzle (same family as V0.7's
+signature Level 5) -- a baseline for comparing against the four Step
+Gravity levels that follow.
+**KEY INSIGHT:** Column 1's tower (9 plain purple + one buried-orange
+`ROUTE` piece) is the only way to complete purple; column 3's decoy
+tower looks identical but is two columns from the orange target and can
+never reach it.
+**DELAYED CLEAR?:** No.
+**TEMPTING MISTAKE:** Placing `ROUTE` in the decoy instead of finishing
+the real tower. Verified: the board becomes unsolvable.
+**VERIFIED SOLUTION:** 19 placements; `level1.solution` in `config.js`.
+
+### LEVEL 2: Step Gravity Introduction
+**GRAVITY MODE:** Step.
+**BOARD CONCEPT:** A wide, uniform, shallow board -- 5 columns, all the
+same floor and height, no funnel.
+**KEY INSIGHT:** A piece placed near the top doesn't teleport to its
+final spot -- it takes visible, countable turns to arrive. There are far
+more total turns than any single piece needs, so exact ordering barely
+matters; this level exists purely to let the player watch movement
+happen and learn to predict it.
+**DELAYED CLEAR?:** No.
+**TEMPTING MISTAKE:** None by design -- deliberately forgiving.
+**VERIFIED SOLUTION:** 10 placements; `level2.solution` in `config.js`.
+
+### LEVEL 3: Crossing Paths
+**GRAVITY MODE:** Step.
+**BOARD CONCEPT:** A wide board with a very tall (height-16) "elevator"
+column standing between a purple region and an orange region, plus decoy
+geometry two columns away.
+**KEY INSIGHT:** The elevator column's top has nothing to touch at all
+(verified: its neighbors up there are only itself) -- a `[purple,
+orange]` piece dropped there must fall through 7+ turns of genuinely
+empty space before entering range of anything. This is a FUTURE POSITION
+problem, not a "which column" one: the eventual landing column is
+obvious from the start, but dropping the piece late enough that it can't
+finish its descent in time still fails.
+**DELAYED CLEAR?:** No.
+**TEMPTING MISTAKE:** Dropping `ELEVATOR` LAST instead of FIRST. Verified:
+it gets stuck mid-descent (slot 14 of 15) with no turns left, and the
+board is unsolvable.
 **VERIFIED SOLUTION:** 19 placements; `level3.solution` in `config.js`.
 
-### LEVEL 4: Cascade Setup
-**BOARD CONCEPT:** A "tower" board, one continuous mass: orange (column
-0) -- a 10-cell purple tower (column 1) -- red (column 2).
-**KEY INSIGHT:** The tower's bottom-to-top order is 6 plain purple, a
-buried-orange piece, 2 more plain purple, then a buried-red piece --
-entirely purple, enough on its own to complete purple's group. When it
-clears, the two buried pieces are the only survivors and compact to the
-column's floor, which (verified) touches BOTH neighbors at once -- orange
-and red reach 10 and clear TOGETHER, in the same cascade, from that one
-purple clear. The payoff is spotting, before it happens, that finishing
-this one column triggers three separate colors in a chain.
-**TEMPTING MISTAKE:** None separately verified for this level (the whole
-point is the payoff, not a trap) -- but any piece spent outside the three
-intended columns would simply be extra territory with no way to
-contribute, since there is nowhere else to place it that helps.
-**EXPECTED DIFFICULTY:** Hard.
-**VERIFIED SOLUTION:** 28 placements; `level4.solution` in `config.js`.
-`tests.js` confirms the cascade is exactly 2 events -- purple, then
-orange AND red together.
+### LEVEL 4: Delay the Clear
+**GRAVITY MODE:** Step.
+**BOARD CONCEPT:** Two separate purple waves -- a dead-end column (2+
+columns from everything relevant) and a column adjacent to an orange
+target. Two "tenth piece" candidates exist: `QUICK` (plain purple) and
+`ELEVATOR` (`[purple, orange]`).
+**KEY INSIGHT:** The dead-end wave has no target waiting on it, so it's
+very likely to reach 9 FIRST -- an available Clear Ten, right there,
+tempting to finish with whatever's in hand. If that's `ELEVATOR`, purple
+clears immediately, but the revealed orange is permanently stranded (the
+dead end can never reach the orange target), and `QUICK` -- now stuck
+finishing the other wave -- reveals nothing.
+**DELAYED CLEAR?:** Yes -- the dead-end wave can be completed as soon as
+it reaches 9, using whichever tenth piece is at hand, but doing so with
+`ELEVATOR` is the trap. The level is solved by deliberately holding
+`ELEVATOR` back for the wave that actually needs it.
+**TEMPTING MISTAKE:** Swapping `ELEVATOR` and `QUICK` between the two
+waves. Verified: unsolvable -- the orange target sits at 9/10 forever.
+**VERIFIED SOLUTION:** 29 placements; `level4.solution` in `config.js`.
 
-### LEVEL 5: Signature Puzzle
-**BOARD CONCEPT:** Combines Level 4's tower-cascade with Levels 1/3's
-wrong-tower decoy on one asymmetric board: an orange target, a real
-10-cell purple tower right beside it, and -- two columns further out -- a
-smaller decoy tower dressed identically (a purple stack topped with its
-own buried-orange piece).
-**KEY INSIGHT:** The decoy tower is two columns from the orange target,
-so its purple can never be part of the same connected group as the real
-tower's -- it would need its own 10 to ever clear, and it only has 6
-cells, so anything spent there is unrecoverable. The signature moment is
-recognizing that the decoy isn't overflow space or a second opportunity;
-it's a complete dead end dressed up to look exactly like the real thing.
-**TEMPTING MISTAKE:** Placing the final buried-orange `ROUTE` piece in
-the decoy tower instead of finishing the real one. Verified: purple gets
-permanently stuck one cell short in the real tower, and the board is
-unsolvable.
-**EXPECTED DIFFICULTY:** Hard.
-**VERIFIED SOLUTION:** 19 placements; `level5.solution` in `config.js`.
+### LEVEL 5: Motion Puzzle (signature)
+**GRAVITY MODE:** Step.
+**BOARD CONCEPT:** Combines Level 4's "two waves, one right piece"
+choice with a 3-layer tower cascade: a dead-end decoy wave, an orange
+target, a 10-cell tower whose floor touches BOTH the orange target AND a
+red target at once (verified), and the red target itself.
+**KEY INSIGHT (future color AND future position together):** `ELEVATOR`
+(this time 3 layers: `[purple, orange, red]`) must go in the tower, not
+the dead end. When the tower's purple clears, `ELEVATOR` is the lone
+survivor and peels to orange -- touching the orange target -> clears ->
+peels again to red -- still in that same cell, now touching the red
+target -> clears -> board empty. One decision made many turns earlier
+pays off as a 3-stage chain reaction.
+**DELAYED CLEAR?:** Yes, same shape as Level 4.
+**TEMPTING MISTAKE:** `ELEVATOR` finishing the dead end instead of the
+tower. Verified: both targets stay stuck at 9/10 forever, and
+`ELEVATOR`'s buried colors are permanently unreachable.
+**VERIFIED SOLUTION:** 38 placements; `level5.solution` in `config.js`.
+`tests.js` confirms the full 3-stage cascade (purple, then orange, then
+red, in that order).
 
 ## PLAYTEST WITHOUT READING THE SOLUTIONS FIRST
 
 Play all five levels before looking at `config.js`. While you play,
 notice:
 
-- Did you ever suddenly understand what the puzzle wanted from you?
-- Was the insight discoverable rather than arbitrary?
-- Did you sometimes intentionally delay a clear?
-- Did you make placements based on colors that were still buried?
-- Did gravity create plans several moves ahead?
-- Were there several plausible choices, not just one obvious path?
-- Were failures clearly attributable to your own decisions?
-- Which level produced the strongest "I see it" moment?
-- Which level felt clever? Which one merely felt difficult?
-- Did removing Undo make mistakes more meaningful, or just annoying?
-- Did you want to immediately Restart after a loss, or did it feel
-  tedious?
+- Did Step Gravity feel understandable? Could you predict where a piece
+  would be next turn?
+- Did you start thinking about WHERE pieces would be several turns from
+  now, not just where they'd end up eventually?
+- Did the levels feel less like vertical stacking, or did they still
+  boil down to "which column"?
+- Did horizontal or diagonal relationships between columns matter to your
+  planning, or was it still purely about depth?
+- Did waiting to trigger a Clear Ten ever feel strategically useful,
+  rather than just delaying the inevitable?
+- Did Step Gravity make the puzzles feel richer, or just slower?
+- Which gravity mode did you personally prefer?
+- Should both gravity modes exist in the eventual game, or should V0.9
+  commit to one?
+- Did Level 5 feel closer to the strategic identity ClearTen should have
+  than Level 1 (the Settle Gravity control) did?
 
-**Most important**: if a level ever feels too easy, that's a note about
-level DESIGN, not a request for a new mechanic. V0.7 exists to learn how
-to build ClearTen levels that produce discovery, foresight, and a
-satisfying realization -- without adding a single new rule.
+**Most important**: the goal of V0.8 is to discover whether controlled
+movement through time makes ClearTen more spatially varied *without*
+losing its simple core -- not to decide that Step Gravity is definitely
+better. If a level feels tedious rather than tense, that's exactly the
+kind of signal this prototype exists to surface.
