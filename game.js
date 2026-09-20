@@ -82,16 +82,19 @@
     return points.join(' ');
   }
 
-  // A layered piece's visual (V0.5, simplified after playtesting found the
-  // V0.4 overlapping-offset-circles treatment too visually messy): one
-  // large circle for the active color, dominating the cell, with tiny
-  // "pip" dots in a row underneath for whatever's buried -- left-to-right
-  // in order (leftmost = next color, rightmost = the one after that).
-  // Never more than 2 pips: this level limits pieces to 2-3 layers total.
-  var LAYER_MAIN_RADIUS = HEX_SIZE * 0.6;
-  var LAYER_PIP_RADIUS = HEX_SIZE * 0.11;
-  var LAYER_PIP_ROW_Y = LAYER_MAIN_RADIUS + LAYER_PIP_RADIUS + HEX_SIZE * 0.14;
-  var LAYER_PIP_SPACING = LAYER_PIP_RADIUS * 2 + HEX_SIZE * 0.08;
+  // A layered piece's visual (V0.11: pips moved INSIDE the active circle's
+  // own footprint, tight against its bottom edge, rather than sitting
+  // below/outside it -- the active color must still visually dominate
+  // ~85-90% of the piece, and buried colors must never make a piece read
+  // as physically taller than a plain one). One large circle for the
+  // active color, with tiny rounded pips overlapping its lower rim --
+  // left-to-right in order (leftmost = next color, rightmost = the one
+  // after that). Never more than 2 pips: this game limits pieces to 2-3
+  // layers total.
+  var LAYER_MAIN_RADIUS = HEX_SIZE * 0.64;
+  var LAYER_PIP_RADIUS = HEX_SIZE * 0.1;
+  var LAYER_PIP_ROW_Y = LAYER_MAIN_RADIUS * 0.6;
+  var LAYER_PIP_SPACING = LAYER_PIP_RADIUS * 2 + HEX_SIZE * 0.05;
 
   function layerCircleSpecs(layers) {
     var buriedCount = layers.length - 1;
@@ -132,6 +135,18 @@
           fill: fillForColor(spec.color),
           class: 'layer-circle layer-active',
           'data-layer-index': spec.layerIndex
+        }));
+        // A small offset highlight ellipse -- the "polished stone/enamel"
+        // glint that makes the token read as a tactile object rather than
+        // a flat filled shape. Never intercepts pointer events or carries
+        // gameplay meaning.
+        g.appendChild(svgEl('ellipse', {
+          cx: spec.cx - spec.r * 0.32,
+          cy: spec.cy - spec.r * 0.4,
+          rx: spec.r * 0.32,
+          ry: spec.r * 0.2,
+          class: 'layer-active-highlight',
+          'pointer-events': 'none'
         }));
       } else {
         var pipSize = spec.r * 2;
@@ -180,6 +195,69 @@
     // a different aspect ratio -- CSS aspect-ratio here lets each board
     // claim as much of the available area as its own shape allows.
     boardSvg.style.aspectRatio = viewBox.w + ' / ' + viewBox.h;
+  }
+
+  // ---- Illustrated scene backdrop (V0.11) ------------------------------------
+  // One shared, hand-authored SVG "Quiet Bay" composition -- dusk sky,
+  // distant isles with glowing windows, a shimmering water band, and a
+  // dark foreground rock/foliage frame -- reused behind all three screens.
+  // Every color that should vary by region is a CSS custom property (see
+  // style.css's [data-region-index] blocks), so the SAME illustration
+  // re-themes per level without regenerating any markup. This is the ONE
+  // polished environment the brief asked for, not eight separate skins.
+  //
+  // ASSET SLOT: this is an SVG approximation (gradients + silhouette
+  // paths), not painted illustration. A real painted background (sky,
+  // isles, water, foreground foliage) would be the single highest-impact
+  // upgrade over this -- see the after-implementation report.
+  var SCENE_SVG_MARKUP = '' +
+    '<svg viewBox="0 0 100 170" preserveAspectRatio="xMidYMax slice" aria-hidden="true">' +
+      '<defs>' +
+        '<linearGradient id="scene-sky" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop class="stop-sky-1" offset="0%"/>' +
+          '<stop class="stop-sky-2" offset="55%"/>' +
+          '<stop class="stop-sky-3" offset="100%"/>' +
+        '</linearGradient>' +
+        '<linearGradient id="scene-water" x1="0" y1="0" x2="0" y2="1">' +
+          '<stop class="stop-water-1" offset="0%"/>' +
+          '<stop class="stop-water-2" offset="100%"/>' +
+        '</linearGradient>' +
+        '<radialGradient id="scene-orb" cx="50%" cy="50%" r="50%">' +
+          '<stop class="stop-orb-1" offset="0%"/>' +
+          '<stop class="stop-orb-2" offset="100%"/>' +
+        '</radialGradient>' +
+      '</defs>' +
+      '<rect x="0" y="0" width="100" height="170" fill="url(#scene-sky)"/>' +
+      '<g class="scene-stars">' +
+        '<circle cx="10" cy="14" r="0.5"/><circle cx="24" cy="8" r="0.4"/>' +
+        '<circle cx="38" cy="18" r="0.6"/><circle cx="52" cy="7" r="0.4"/>' +
+        '<circle cx="68" cy="15" r="0.5"/><circle cx="82" cy="9" r="0.4"/>' +
+        '<circle cx="91" cy="20" r="0.5"/><circle cx="15" cy="28" r="0.4"/>' +
+        '<circle cx="60" cy="24" r="0.4"/><circle cx="76" cy="30" r="0.5"/>' +
+      '</g>' +
+      '<circle class="scene-orb-glow" cx="70" cy="34" r="20"/>' +
+      '<circle class="scene-orb" cx="70" cy="34" r="7"/>' +
+      '<path class="scene-isle-far" d="M0,86 L9,70 L19,80 L29,62 L42,78 L55,64 L67,80 L79,66 L90,82 L100,72 L100,170 L0,170 Z"/>' +
+      '<g class="scene-isle-lights">' +
+        '<circle cx="29" cy="66" r="0.55"/><circle cx="55" cy="68" r="0.5"/><circle cx="79" cy="70" r="0.55"/>' +
+      '</g>' +
+      '<path class="scene-isle-near" d="M0,104 L12,90 L26,102 L38,84 L52,100 L64,88 L78,106 L100,92 L100,170 L0,170 Z"/>' +
+      '<rect x="0" y="112" width="100" height="58" fill="url(#scene-water)"/>' +
+      '<g class="scene-water-shimmer">' +
+        '<rect x="8" y="122" width="18" height="0.6" rx="0.3"/>' +
+        '<rect x="42" y="132" width="24" height="0.6" rx="0.3"/>' +
+        '<rect x="20" y="144" width="30" height="0.7" rx="0.35"/>' +
+        '<rect x="60" y="126" width="16" height="0.6" rx="0.3"/>' +
+        '<rect x="70" y="150" width="22" height="0.7" rx="0.35"/>' +
+      '</g>' +
+      '<path class="scene-foreground scene-foreground-left" d="M0,170 L0,118 Q14,124 17,140 Q19,156 8,170 Z"/>' +
+      '<path class="scene-foreground scene-foreground-right" d="M100,170 L100,124 Q86,130 84,144 Q83,158 94,170 Z"/>' +
+    '</svg>';
+
+  function renderSceneInto(el) {
+    if (!el || el.dataset.sceneBuilt) return;
+    el.innerHTML = SCENE_SVG_MARKUP;
+    el.dataset.sceneBuilt = 'true';
   }
 
   // ---- Mascot (V0.10) --------------------------------------------------------
@@ -265,6 +343,9 @@
   var titleMascotEl = document.getElementById('title-mascot');
   var boardMascotEl = document.getElementById('board-mascot');
   var endMascotEl = document.getElementById('end-mascot');
+  var sceneTitleEl = document.getElementById('scene-title');
+  var sceneMapEl = document.getElementById('scene-map');
+  var sceneGameEl = document.getElementById('scene-game');
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
   function svgEl(tag, attrs) {
@@ -497,41 +578,62 @@
     });
   }
 
-  // Tile elements are cached across renders so preview highlighting (which
-  // happens continuously on pointermove) can toggle CSS classes on existing
-  // elements instead of tearing down and rebuilding the whole SVG. Rebuilding
-  // the DOM on every mouse move is not just wasteful -- it can detach the
-  // very element mid-click and cause the click to be swallowed by the
-  // browser, which is a real bug, not just a performance concern.
-  var tileElements = {}; // key -> polygon element
+  // V0.11 board treatment: the old "programmer drew a hex grid" look (one
+  // stroked hex polygon per cell) is gone. Visually, a cell is now a soft
+  // round "well" sunk into one continuous sculpted tray -- the tray's
+  // organic silhouette is many overlapping circles (one per cell, larger
+  // than the cell spacing) fused into a single soft shape by the #goo-tray
+  // SVG filter (a standard blur-then-threshold "metaball" trick). None of
+  // this touches the underlying hex coordinates: `cellPixels` positions
+  // are exactly the same axial-derived centers as before, so adjacency,
+  // gravity, and every gameplay rule are entirely unaffected -- only how
+  // each position is DRAWN changed.
+  //
+  // A cell's clickable area is a separate, fully invisible hex polygon
+  // (`cell-hit`) laid on TOP of the visible pieces/wells, in the exact
+  // same position a visible hex tile used to occupy. Since its fill is
+  // transparent, it never changes what the player sees -- it exists only
+  // to keep 100% of the board's surface reliably tappable (no dead zones
+  // between the now-smaller visible wells), and every hit-hex + the
+  // piece sitting on it carry the same data-col/data-slot, so it doesn't
+  // matter which one an event target resolves to.
+  var wellElements = {}; // key -> visible well circle (preview/debug styling target)
   var previewedKeys = []; // keys currently carrying a preview-* class
 
   // Full rebuild: call this whenever the underlying board state changes
   // (placement, cascade step, undo, restart). Does NOT apply any preview.
   function renderBoard() {
     while (boardSvg.firstChild) boardSvg.removeChild(boardSvg.firstChild);
-    tileElements = {};
+    wellElements = {};
     previewedKeys = [];
 
     var legalDebugCells = debugLegalCellKeys();
+    var keys = Object.keys(cellPixels);
 
-    // Tiles (background hexes), drawn first so pieces sit on top.
-    Object.keys(cellPixels).forEach(function (key) {
+    // 1. Tray silhouette: one large soft circle per cell, fused into a
+    // single organic shape by the goo filter. Purely decorative.
+    var trayFilterGroup = svgEl('g', { filter: 'url(#goo-tray)' });
+    keys.forEach(function (key) {
       var cell = cellPixels[key];
-      var tileClass = 'hex-tile';
-      if (legalDebugCells[key]) tileClass += ' debug-legal';
-      var hex = svgEl('polygon', {
-        points: hexCorners(cell.x, cell.y, HEX_SIZE),
-        class: tileClass,
-        'data-col': cell.col,
-        'data-slot': cell.slot
+      trayFilterGroup.appendChild(svgEl('circle', {
+        cx: cell.x, cy: cell.y, r: HEX_SIZE * 0.98, class: 'tray-blob-dot'
+      }));
+    });
+    boardSvg.appendChild(trayFilterGroup);
+
+    // 2. Visible wells (empty-cell pockets).
+    keys.forEach(function (key) {
+      var cell = cellPixels[key];
+      var well = svgEl('circle', {
+        cx: cell.x, cy: cell.y, r: HEX_SIZE * 0.72,
+        class: 'cell-well' + (legalDebugCells[key] ? ' debug-legal' : '')
       });
-      boardSvg.appendChild(hex);
-      tileElements[key] = hex;
+      boardSvg.appendChild(well);
+      wellElements[key] = well;
     });
 
-    // Pieces.
-    Object.keys(cellPixels).forEach(function (key) {
+    // 3. Pieces, seated in their wells.
+    keys.forEach(function (key) {
       var cell = cellPixels[key];
       var layers = Logic.getLayers(state.board, cell.col, cell.slot);
       if (!layers) return;
@@ -541,10 +643,21 @@
       boardSvg.appendChild(group);
     });
 
+    // 4. Invisible full-hex hit areas, topmost, for 100% tap coverage.
+    keys.forEach(function (key) {
+      var cell = cellPixels[key];
+      boardSvg.appendChild(svgEl('polygon', {
+        points: hexCorners(cell.x, cell.y, HEX_SIZE),
+        class: 'cell-hit',
+        'data-col': cell.col,
+        'data-slot': cell.slot
+      }));
+    });
+
     // Debug labels last, on top of everything, so they stay legible even
     // over an occupied cell's piece visual.
     if (DEBUG) {
-      Object.keys(cellPixels).forEach(function (key) {
+      keys.forEach(function (key) {
         boardSvg.appendChild(buildDebugLabel(cellPixels[key]));
       });
     }
@@ -586,7 +699,7 @@
   // {cells, valid} to highlight a candidate placement.
   function setPreview(preview) {
     previewedKeys.forEach(function (key) {
-      var el = tileElements[key];
+      var el = wellElements[key];
       if (el) el.classList.remove('preview-valid', 'preview-invalid');
     });
     previewedKeys = [];
@@ -595,7 +708,7 @@
     var cls = preview.valid ? 'preview-valid' : 'preview-invalid';
     preview.cells.forEach(function (c) {
       var key = Logic.cellKey(c.col, c.slot);
-      var el = tileElements[key];
+      var el = wellElements[key];
       if (el) {
         el.classList.add(cls);
         previewedKeys.push(key);
@@ -610,6 +723,21 @@
   function activeCircleAt(col, slot) {
     var group = pieceGroupAt(col, slot);
     return group ? group.querySelector('.layer-active') : null;
+  }
+
+  // The active circle's specular-highlight ellipse (see buildPieceVisual)
+  // is a separate sibling element purely for visual polish -- it must
+  // fade/pulse in lockstep with the active circle whenever a clear or
+  // emphasize animation runs, or it would be left floating on screen
+  // after the circle underneath it has already faded away.
+  function addActiveAnimClass(col, slot, cls) {
+    var circle = activeCircleAt(col, slot);
+    if (!circle) return;
+    circle.classList.add(cls);
+    var highlight = circle.nextElementSibling;
+    if (highlight && highlight.classList.contains('layer-active-highlight')) {
+      highlight.classList.add(cls);
+    }
   }
 
   // ---- Rendering: piece previews (bottom bar) --------------------------------
@@ -742,8 +870,7 @@
     hasShownFirstClearTutorial = true;
     groups.forEach(function (group) {
       group.cells.forEach(function (c) {
-        var el = activeCircleAt(c.col, c.slot);
-        if (el) el.classList.add('emphasize');
+        addActiveAnimClass(c.col, c.slot, 'emphasize');
       });
     });
     clearCallout.hidden = false;
@@ -939,8 +1066,7 @@
       // underneath" instead of the whole piece vanishing.
       event.groups.forEach(function (group) {
         group.cells.forEach(function (c) {
-          var el = activeCircleAt(c.col, c.slot);
-          if (el) el.classList.add('clearing');
+          addActiveAnimClass(c.col, c.slot, 'clearing');
         });
       });
       delay(CLEAR_ANIMATION_MS).then(function () {
@@ -998,6 +1124,9 @@
   mapBtn.addEventListener('click', function () { showScreen('map'); });
   endMapBtn.addEventListener('click', function () { hideEndOverlay(); showScreen('map'); });
 
+  renderSceneInto(sceneTitleEl);
+  renderSceneInto(sceneMapEl);
+  renderSceneInto(sceneGameEl);
   renderMascotInto(titleMascotEl, 'idle');
   resetGame();
   showScreen('title');

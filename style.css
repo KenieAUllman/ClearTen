@@ -1,44 +1,74 @@
 :root {
-  /* ---- Cozy/magical base palette (V0.10 visual pass) ---- */
+  /* ---- Base palette ---- */
   --ink: #2c2440;
   --ink-soft: #8078a0;
   --cream: #fbf3e6;
   --cream-soft: #f3e9d8;
-  --twilight-1: #1b1440;
-  --twilight-2: #241a52;
   --accent-gold: #e8b563;
   --accent-gold-ink: #3a2a12;
-  --accent-teal: #5fb3a3;
-  --danger-soft: #d9776b;
-  --board-tile: #efe7d8;
-  --board-tile-line: #d9cdb4;
-  --preview-valid: #6fbf9e;
-  --preview-invalid: #d98a8a;
+  --danger-soft: #e58b7d;
 
-  /* Gameplay token colors -- unchanged semantics from earlier versions,
-     kept as variables only so chrome around them can reference them too. */
+  /* Gameplay token colors -- unchanged semantics, exposed as variables
+     only so chrome elements can reference them too. */
   --c-red: #e15c5c;
   --c-purple: #8d6fd1;
   --c-orange: #f0a04b;
 
-  /* Per-region scene theme, overridden by [data-region-index] below.
-     Falls back to Moonlit Peaks so nothing is ever unthemed. */
-  --scene-1: #1b1440;
-  --scene-2: #362a68;
-  --scene-accent: #e8b563;
-  --mascot-body: #f6ead9;
+  /* Foreground rock/foliage stays a constant near-black across every
+     region on purpose -- readability and a stable "frame" matter more
+     here than regional flavor (see the region blocks below for what DOES
+     vary: sky, water, the glowing orb, and the distant isles). */
+  --scene-foreground: #110c26;
+
+  /* Region 0 (Moonlit Peaks) doubles as the root default, so nothing is
+     ever unthemed before a level has loaded. */
+  --scene-sky-1: #0d0a24;
+  --scene-sky-2: #241a52;
+  --scene-sky-3: #4a3a7a;
+  --scene-water-1: #1c1440;
+  --scene-water-2: #100b28;
+  --scene-orb: #f4ecff;
+  --scene-isle-far: #2c2260;
+  --scene-isle-near: #171034;
+  --scene-accent: #cdb7ff;
   --mascot-scarf: #6f8fd1;
 }
 
 /* ---------- Region themes (flavor only -- never changes gameplay) ---------- */
-/* Index matches Config.LEVELS order: 0 Moonlit Peaks .. 5 Crystal Cavern. */
+/* Index matches Config.LEVELS order: 0 Moonlit Peaks .. 5 Crystal Cavern.
+   One shared illustrated scene (see game.js's SCENE_SVG_MARKUP) is
+   entirely re-colored by these variables rather than redrawn per region. */
 
-[data-region-index="0"] { --scene-1: #171136; --scene-2: #362a68; --scene-accent: #cdb7ff; --mascot-scarf: #6f8fd1; }
-[data-region-index="1"] { --scene-1: #241a52; --scene-2: #7d5fa8; --scene-accent: #f3c9e0; --mascot-scarf: #b98fe0; }
-[data-region-index="2"] { --scene-1: #0f2e28; --scene-2: #1f5c46; --scene-accent: #bfe6a8; --mascot-scarf: #4f9d6e; }
-[data-region-index="3"] { --scene-1: #1c2f52; --scene-2: #2c7a86; --scene-accent: #ffd39b; --mascot-scarf: #4fb3a8; }
-[data-region-index="4"] { --scene-1: #3a2140; --scene-2: #9a5a3a; --scene-accent: #ffcf87; --mascot-scarf: #d98a4f; }
-[data-region-index="5"] { --scene-1: #14203f; --scene-2: #2a5a78; --scene-accent: #9be3e8; --mascot-scarf: #5fc9d1; }
+[data-region-index="1"] {
+  --scene-sky-1: #1c1440; --scene-sky-2: #5a3f7a; --scene-sky-3: #d98fae;
+  --scene-water-1: #4a2f66; --scene-water-2: #241a44;
+  --scene-orb: #ffe3c4; --scene-isle-far: #6a4a8a; --scene-isle-near: #3a2860;
+  --scene-accent: #f3c9e0; --mascot-scarf: #b98fe0;
+}
+[data-region-index="2"] {
+  --scene-sky-1: #0c1f22; --scene-sky-2: #1f5c46; --scene-sky-3: #6ea86a;
+  --scene-water-1: #14382c; --scene-water-2: #0a2018;
+  --scene-orb: #f6ffe0; --scene-isle-far: #1f4a3a; --scene-isle-near: #0e2a20;
+  --scene-accent: #bfe6a8; --mascot-scarf: #4f9d6e;
+}
+[data-region-index="3"] {
+  --scene-sky-1: #14243f; --scene-sky-2: #2c7a86; --scene-sky-3: #f2a86a;
+  --scene-water-1: #1c4a52; --scene-water-2: #0e2830;
+  --scene-orb: #fff0cf; --scene-isle-far: #235a66; --scene-isle-near: #123640;
+  --scene-accent: #ffd39b; --mascot-scarf: #4fb3a8;
+}
+[data-region-index="4"] {
+  --scene-sky-1: #2a1830; --scene-sky-2: #7a3f3a; --scene-sky-3: #e8975a;
+  --scene-water-1: #4a2820; --scene-water-2: #26140f;
+  --scene-orb: #ffe6c0; --scene-isle-far: #6a3830; --scene-isle-near: #3a1c18;
+  --scene-accent: #ffcf87; --mascot-scarf: #d98a4f;
+}
+[data-region-index="5"] {
+  --scene-sky-1: #0c1830; --scene-sky-2: #1f4a68; --scene-sky-3: #5ecfd6;
+  --scene-water-1: #143850; --scene-water-2: #0a1e30;
+  --scene-orb: #d6fbff; --scene-isle-far: #234a68; --scene-isle-near: #10283c;
+  --scene-accent: #9be3e8; --mascot-scarf: #5fc9d1;
+}
 
 * {
   box-sizing: border-box;
@@ -48,9 +78,9 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--twilight-1);
+  background: var(--scene-sky-1);
   color: var(--ink);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Quicksand', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 body {
@@ -73,7 +103,7 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--twilight-1);
+  background: var(--scene-sky-1);
   position: relative;
   overflow: hidden;
 }
@@ -85,7 +115,7 @@ body {
   inset: 0;
   display: flex;
   flex-direction: column;
-  animation: screen-fade-in 320ms ease both;
+  animation: screen-fade-in 380ms ease both;
 }
 
 .screen[hidden] {
@@ -93,74 +123,100 @@ body {
 }
 
 @keyframes screen-fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* Scenic backdrop shared by all three screens: a soft two-tone gradient
-   "sky" plus a subtle star field and a warm glow, entirely CSS -- no
-   image assets. Kept BEHIND everything and never receives pointer
-   events, so it can never interfere with gameplay input. */
+/* ---------- Illustrated scene backdrop (shared across all 3 screens) ---------- */
+/* One hand-authored SVG (see game.js's SCENE_SVG_MARKUP), entirely
+   re-colored per region by the CSS variables above. This is the ONE
+   polished environment the redesign concentrates on, rather than eight
+   thin skins -- see the after-implementation report for what a real
+   painted illustration would still add on top of this. */
 
 .scene {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: linear-gradient(160deg, var(--scene-1) 0%, var(--scene-2) 100%);
-  transition: background 500ms ease;
   overflow: hidden;
 }
 
-.scene-stars {
+.scene svg {
   position: absolute;
   inset: 0;
+  width: 100%;
+  height: 100%;
+  transition: filter 500ms ease;
+}
+
+.stop-sky-1 { stop-color: var(--scene-sky-1); }
+.stop-sky-2 { stop-color: var(--scene-sky-2); }
+.stop-sky-3 { stop-color: var(--scene-sky-3); }
+.stop-water-1 { stop-color: var(--scene-water-1); }
+.stop-water-2 { stop-color: var(--scene-water-2); }
+.stop-orb-1 { stop-color: var(--scene-orb); stop-opacity: 0.9; }
+.stop-orb-2 { stop-color: var(--scene-orb); stop-opacity: 0; }
+
+.scene-stars circle {
+  fill: #ffffff;
+  opacity: 0.7;
+}
+
+.scene-orb-glow {
+  fill: url(#scene-orb);
   opacity: 0.55;
-  background-image:
-    radial-gradient(1.4px 1.4px at 10% 18%, #ffffff 100%, transparent 60%),
-    radial-gradient(1.2px 1.2px at 26% 32%, #ffffff 100%, transparent 60%),
-    radial-gradient(1.6px 1.6px at 42% 12%, #ffffff 100%, transparent 60%),
-    radial-gradient(1.2px 1.2px at 61% 26%, #ffffff 100%, transparent 60%),
-    radial-gradient(1.4px 1.4px at 76% 15%, #ffffff 100%, transparent 60%),
-    radial-gradient(1.2px 1.2px at 88% 34%, #ffffff 100%, transparent 60%),
-    radial-gradient(1.6px 1.6px at 19% 52%, #ffffff 100%, transparent 60%),
-    radial-gradient(1.2px 1.2px at 70% 55%, #ffffff 100%, transparent 60%);
-  background-repeat: no-repeat;
 }
 
-.scene-glow {
-  position: absolute;
-  left: 50%;
-  top: 38%;
-  width: 220px;
-  height: 220px;
-  transform: translate(-50%, -50%);
-  background: radial-gradient(circle, var(--scene-accent) 0%, transparent 72%);
-  opacity: 0.28;
-  filter: blur(2px);
-  animation: glow-breathe 6s ease-in-out infinite;
+.scene-orb {
+  fill: var(--scene-orb);
+  filter: drop-shadow(0 0 3px var(--scene-orb));
 }
 
-@keyframes glow-breathe {
-  0%, 100% { opacity: 0.22; transform: translate(-50%, -50%) scale(1); }
-  50% { opacity: 0.34; transform: translate(-50%, -50%) scale(1.06); }
+.scene-isle-far {
+  fill: var(--scene-isle-far);
+  opacity: 0.75;
 }
 
-/* Game screen's scene sits low-key and static (readability first), and
-   its glow is repositioned near the board rather than centered. */
-.scene--game .scene-glow {
-  top: 44%;
-  width: 260px;
-  height: 260px;
-  opacity: 0.16;
-  animation: none;
+.scene-isle-near {
+  fill: var(--scene-isle-near);
+}
+
+.scene-isle-lights circle {
+  fill: var(--scene-accent);
+  opacity: 0.85;
+  animation: isle-light-twinkle 3.2s ease-in-out infinite;
+}
+
+.scene-isle-lights circle:nth-child(2) { animation-delay: 0.9s; }
+.scene-isle-lights circle:nth-child(3) { animation-delay: 1.8s; }
+
+@keyframes isle-light-twinkle {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.scene-water-shimmer rect {
+  fill: #ffffff;
+  opacity: 0.14;
+  animation: water-shimmer 4.5s ease-in-out infinite;
+}
+
+.scene-water-shimmer rect:nth-child(2) { animation-delay: 1.1s; }
+.scene-water-shimmer rect:nth-child(3) { animation-delay: 2.2s; }
+.scene-water-shimmer rect:nth-child(4) { animation-delay: 0.6s; }
+.scene-water-shimmer rect:nth-child(5) { animation-delay: 1.7s; }
+
+@keyframes water-shimmer {
+  0%, 100% { opacity: 0.08; }
+  50% { opacity: 0.24; }
+}
+
+.scene-foreground {
+  fill: var(--scene-foreground);
 }
 
 /* ---------- Mascot (shared across title / board / end-card / map) ---------- */
-/* A small, deliberately simple traveler -- soft body, two ears, a scarf
-   in the current region's accent, and a face that switches mood via a
-   CSS class. Geometry lives in JS (buildMascotSVG); this just sizes and
-   places the wrapper per context. */
 
 .mascot-wrap {
   display: flex;
@@ -171,35 +227,34 @@ body {
 
 .mascot-wrap svg {
   display: block;
-  filter: drop-shadow(0 6px 10px rgba(20, 14, 40, 0.35));
+  filter: drop-shadow(0 8px 10px rgba(5, 3, 16, 0.5));
 }
 
 .mascot-wrap--title {
-  width: 128px;
-  height: 128px;
-  margin-bottom: 6px;
+  width: 116px;
+  height: 116px;
+  margin-bottom: 4px;
   animation: mascot-bob 3.4s ease-in-out infinite;
 }
 
-.mascot-wrap--board {
-  position: absolute;
-  right: 6px;
-  bottom: 2px;
-  width: 56px;
-  height: 56px;
+.board-mascot-perch {
+  position: relative;
   z-index: 2;
+  width: 64px;
+  height: 64px;
+  margin: -8px auto 0;
   animation: mascot-bob 3.8s ease-in-out infinite;
 }
 
 .mascot-wrap--end {
-  width: 72px;
-  height: 72px;
-  margin: 0 auto 4px;
+  width: 68px;
+  height: 68px;
+  margin: 0 auto 2px;
 }
 
 .mascot-wrap--map {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   position: absolute;
   pointer-events: none;
   transition: left 420ms ease, top 420ms ease;
@@ -223,8 +278,8 @@ body {
   50% { opacity: 1; transform: scale(1.1); }
 }
 
-.mascot-body { fill: var(--mascot-body); stroke: rgba(44, 36, 64, 0.12); stroke-width: 1; }
-.mascot-ear { fill: var(--mascot-body); stroke: rgba(44, 36, 64, 0.12); stroke-width: 1; }
+.mascot-body { fill: var(--cream); stroke: rgba(44, 36, 64, 0.1); stroke-width: 1; }
+.mascot-ear { fill: var(--cream); stroke: rgba(44, 36, 64, 0.1); stroke-width: 1; }
 .mascot-ear-inner { fill: #f1c9c9; opacity: 0.7; }
 .mascot-scarf { fill: var(--mascot-scarf); }
 .mascot-scarf-tail { fill: var(--mascot-scarf); opacity: 0.92; }
@@ -252,34 +307,27 @@ body {
 
 .game-title {
   margin: 0;
-  font-size: 42px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
+  font-family: 'Cinzel', serif;
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   color: var(--cream);
-  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  text-shadow: 0 4px 22px rgba(0, 0, 0, 0.45);
 }
 
 .tagline {
-  margin: 6px 0 28px;
-  font-size: 14px;
+  margin: 8px 0 30px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--scene-accent);
   opacity: 0.9;
 }
 
 .btn-play {
-  min-width: 180px;
+  min-width: 168px;
   font-size: 17px;
-}
-
-.title-flavor {
-  margin-top: 22px;
-  max-width: 260px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: rgba(251, 243, 230, 0.7);
 }
 
 /* ---------- Map screen ---------- */
@@ -287,19 +335,20 @@ body {
 .map-header {
   position: relative;
   z-index: 1;
-  padding: 22px 24px 4px;
+  padding: 26px 24px 4px;
   text-align: center;
 }
 
 .map-title {
   margin: 0;
+  font-family: 'Cinzel', serif;
   font-size: 22px;
-  font-weight: 800;
+  font-weight: 700;
   color: var(--cream);
 }
 
 .map-subtitle {
-  margin: 4px 0 0;
+  margin: 5px 0 0;
   font-size: 13px;
   color: rgba(251, 243, 230, 0.65);
 }
@@ -307,9 +356,6 @@ body {
 .map-path {
   position: relative;
   z-index: 1;
-  /* .mascot-wrap--map's left/top are computed in JS relative to this
-     element's own bounding box (renderMap), so it must be the positioning
-     context -- not an ancestor .screen. */
   flex: 1;
   padding: 28px 20px 40px;
   display: flex;
@@ -344,21 +390,21 @@ body {
 
 .map-node {
   position: relative;
-  width: 64px;
-  height: 64px;
+  width: 62px;
+  height: 62px;
   border-radius: 50%;
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
-  background: linear-gradient(160deg, var(--cream) 0%, var(--cream-soft) 100%);
+  font-family: 'Quicksand', sans-serif;
+  background: radial-gradient(circle at 38% 32%, #fff8ec 0%, #d9c9a3 55%, #9c8256 100%);
   color: var(--ink);
   font-size: 19px;
-  font-weight: 800;
-  box-shadow: 0 6px 16px rgba(10, 6, 30, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  transition: transform 140ms ease, box-shadow 140ms ease;
+  font-weight: 700;
+  box-shadow: 0 6px 16px rgba(5, 3, 16, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  transition: transform 140ms ease;
 }
 
 .map-node:active {
@@ -366,9 +412,9 @@ body {
 }
 
 .map-node.current {
-  background: linear-gradient(160deg, var(--accent-gold) 0%, #d99a3f 100%);
+  background: radial-gradient(circle at 38% 32%, #fff3d6 0%, var(--accent-gold) 55%, #b57c2d 100%);
   color: var(--accent-gold-ink);
-  box-shadow: 0 0 0 4px rgba(232, 181, 99, 0.28), 0 8px 20px rgba(10, 6, 30, 0.4);
+  box-shadow: 0 0 0 4px rgba(232, 181, 99, 0.28), 0 8px 20px rgba(5, 3, 16, 0.5);
 }
 
 .map-node.completed::after {
@@ -376,12 +422,12 @@ body {
   position: absolute;
   top: -4px;
   right: -4px;
-  width: 20px;
-  height: 20px;
+  width: 19px;
+  height: 19px;
   border-radius: 50%;
-  background: var(--accent-teal);
-  color: #0d2b26;
-  font-size: 12px;
+  background: var(--scene-accent);
+  color: #10283c;
+  font-size: 11px;
   font-weight: 800;
   display: flex;
   align-items: center;
@@ -405,37 +451,34 @@ body {
 
 /* ---------- Game screen: top bar ---------- */
 
-.game-screen {
-  background: var(--twilight-1);
-}
-
 .top-bar {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 16px 16px 8px;
+  padding: 14px 16px 4px;
 }
 
 .icon-btn {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   border: none;
-  background: rgba(251, 243, 230, 0.12);
+  background: rgba(17, 12, 38, 0.35);
   color: var(--cream);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
+  backdrop-filter: blur(3px);
   transition: background 120ms ease, transform 120ms ease;
 }
 
 .icon-btn:active {
   transform: scale(0.92);
-  background: rgba(251, 243, 230, 0.22);
+  background: rgba(17, 12, 38, 0.5);
 }
 
 .title-group {
@@ -446,20 +489,22 @@ body {
 }
 
 .region-name {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--scene-accent);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
 .level-name {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--cream);
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
 /* Developer level select: hidden from normal play (see DEBUG in game.js)
@@ -472,13 +517,13 @@ body {
 }
 
 .level-select-btn {
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border-radius: 6px;
   border: 1px solid rgba(251, 243, 230, 0.3);
   background: transparent;
   color: var(--cream);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   cursor: pointer;
   padding: 0;
@@ -490,31 +535,28 @@ body {
   color: var(--accent-gold-ink);
 }
 
-/* ---------- Board area ---------- */
+/* ---------- Board area: the puzzle sits directly in the scene ---------- */
+/* No boxed panel, no separate card -- the board's own tray silhouette
+   (drawn in game.js via the #goo-tray filter) IS the container. */
 
 .board-area {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8px 16px;
+  padding: 4px 14px;
   position: relative;
   min-height: 0;
   z-index: 1;
 }
 
-.board-frame {
-  position: relative;
+.board-stage {
   width: 100%;
-  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-  border-radius: 22px;
-  background: linear-gradient(165deg, rgba(251, 243, 230, 0.08) 0%, rgba(251, 243, 230, 0.02) 100%);
-  border: 1px solid rgba(251, 243, 230, 0.14);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 14px 30px rgba(6, 4, 20, 0.35);
+  filter: drop-shadow(0 18px 26px rgba(4, 2, 14, 0.55));
 }
 
 #board-svg {
@@ -526,31 +568,44 @@ body {
   width: auto;
   height: 100%;
   max-width: 100%;
-  max-height: 52vh;
+  max-height: 46vh;
   touch-action: manipulation;
   user-select: none;
+  overflow: visible;
 }
 
-.hex-tile {
-  fill: var(--board-tile);
-  stroke: var(--board-tile-line);
+.tray-blob-dot {
+  fill: url(#tray-fill);
+}
+
+.cell-well {
+  fill: url(#well-empty);
+  stroke: rgba(17, 12, 38, 0.25);
+  stroke-width: 0.25;
+  transition: filter 140ms ease, stroke 140ms ease;
+}
+
+.cell-well.preview-valid {
+  stroke: #6fbf9e;
   stroke-width: 0.6;
-  transition: fill 120ms ease;
+  filter: drop-shadow(0 0 1.4px #6fbf9e);
 }
 
-.hex-tile.preview-valid {
-  fill: var(--preview-valid);
-  opacity: 0.55;
+.cell-well.preview-invalid {
+  stroke: var(--danger-soft);
+  stroke-width: 0.6;
+  filter: drop-shadow(0 0 1.4px var(--danger-soft));
 }
 
-.hex-tile.preview-invalid {
-  fill: var(--preview-invalid);
-  opacity: 0.55;
+.cell-well.debug-legal {
+  stroke: #6fbf9e;
+  stroke-width: 0.5;
 }
 
-.hex-tile.debug-legal {
-  stroke: var(--accent-teal);
-  stroke-width: 1;
+.cell-hit {
+  fill: transparent;
+  pointer-events: all;
+  cursor: pointer;
 }
 
 /* A piece is <g.piece-group> (position only, via CSS transform set from
@@ -578,20 +633,21 @@ body {
 }
 
 .layer-circle {
-  stroke: rgba(255, 255, 255, 0.55);
-  stroke-width: 0.3;
+  stroke: rgba(255, 255, 255, 0.5);
+  stroke-width: 0.28;
 }
 
 .layer-active {
-  stroke-width: 0.35;
+  stroke-width: 0.32;
 }
 
-.layer-pip {
-  stroke: rgba(255, 255, 255, 0.85);
-  stroke-width: 0.25;
+.layer-active-highlight {
+  fill: #ffffff;
+  opacity: 0.55;
 }
 
-.layer-active.clearing {
+.layer-active.clearing,
+.layer-active-highlight.clearing {
   transform-box: fill-box;
   transform-origin: center;
   transition: transform 320ms ease-in, opacity 320ms ease-in;
@@ -599,10 +655,16 @@ body {
   opacity: 0;
 }
 
-.layer-active.emphasize {
+.layer-active.emphasize,
+.layer-active-highlight.emphasize {
   transform-box: fill-box;
   transform-origin: center;
   animation: emphasize-pulse 480ms ease-in-out 2;
+}
+
+.layer-pip {
+  stroke: rgba(255, 255, 255, 0.7);
+  stroke-width: 0.2;
 }
 
 @keyframes pop-in {
@@ -630,10 +692,10 @@ body {
 
 .intro-banner {
   position: absolute;
-  top: 10px;
+  top: 6px;
   left: 16px;
   right: 16px;
-  z-index: 5;
+  z-index: 3;
   display: flex;
   justify-content: center;
   pointer-events: none;
@@ -651,32 +713,33 @@ body {
 
 .intro-banner p {
   margin: 0;
-  background: var(--cream);
-  color: var(--ink);
-  font-size: 13px;
+  background: rgba(17, 12, 38, 0.55);
+  backdrop-filter: blur(4px);
+  color: var(--cream);
+  font-size: 12.5px;
   font-weight: 600;
-  padding: 10px 16px;
+  padding: 8px 16px;
   border-radius: 999px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   text-align: center;
 }
 
 .clear-callout {
   position: absolute;
-  top: 42%;
+  top: 40%;
   left: 50%;
   z-index: 6;
   transform: translate(-50%, -50%) scale(0.7);
-  background: linear-gradient(160deg, var(--accent-gold) 0%, #d99a3f 100%);
+  background: radial-gradient(circle at 38% 30%, #fff3d6 0%, var(--accent-gold) 60%, #b57c2d 100%);
   color: var(--accent-gold-ink);
-  font-size: 20px;
-  font-weight: 800;
+  font-family: 'Cinzel', serif;
+  font-size: 19px;
+  font-weight: 700;
   letter-spacing: 0.03em;
   padding: 14px 22px;
   border-radius: 16px;
   pointer-events: none;
   opacity: 0;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   transition: opacity 220ms ease, transform 220ms ease;
 }
 
@@ -690,32 +753,29 @@ body {
 }
 
 /* ---------- Bottom bar / pieces ---------- */
+/* Deliberately NOT a stark white card: a translucent, softly blurred
+   shelf that reads as part of the same scene, not a separate UI panel. */
 
 .bottom-bar {
   position: relative;
-  z-index: 1;
-  padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px));
-  background: var(--cream);
-  border-top: 1px solid rgba(44, 36, 64, 0.08);
-  border-radius: 22px 22px 0 0;
-  box-shadow: 0 -8px 24px rgba(6, 4, 20, 0.28);
-}
-
-.pieces-section {
-  margin-bottom: 6px;
+  z-index: 2;
+  padding: 10px 18px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(180deg, rgba(17, 12, 38, 0) 0%, rgba(17, 12, 38, 0.55) 28%, rgba(17, 12, 38, 0.72) 100%);
 }
 
 .piece-row {
   display: flex;
-  gap: 12px;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 10px;
 }
 
 .piece-slot {
-  flex: 1;
-  min-height: 84px;
-  border-radius: 16px;
-  background: var(--cream-soft);
-  border: 2px solid transparent;
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, rgba(251, 243, 230, 0.16) 0%, rgba(251, 243, 230, 0.05) 70%);
+  border: 1px solid rgba(251, 243, 230, 0.18);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -728,39 +788,40 @@ body {
 }
 
 .current-row .piece-slot:active {
-  transform: scale(0.96);
+  transform: scale(0.94);
 }
 
 .current-row .piece-slot.selected {
-  border-color: var(--accent-teal);
-  background: #e3f2ec;
+  border-color: var(--scene-accent);
+  background: radial-gradient(circle at 38% 32%, rgba(251, 243, 230, 0.28) 0%, rgba(251, 243, 230, 0.08) 70%);
 }
 
 .current-row .piece-slot.empty {
   background: transparent;
+  border-color: transparent;
 }
 
 .piece-slot svg {
   width: 100%;
   height: 100%;
-  max-width: 110px;
+  max-width: 96px;
 }
 
 .controls-row {
   display: flex;
-  gap: 10px;
-  margin-top: 12px;
+  justify-content: center;
+  gap: 12px;
 }
 
 .btn {
-  flex: 1;
   border: none;
-  border-radius: 14px;
-  padding: 14px 10px;
-  font-size: 15px;
+  border-radius: 999px;
+  padding: 12px 22px;
+  font-family: 'Quicksand', sans-serif;
+  font-size: 14px;
   font-weight: 700;
   cursor: pointer;
-  min-height: 48px;
+  min-height: 44px;
   transition: transform 120ms ease, filter 120ms ease;
 }
 
@@ -769,7 +830,7 @@ body {
 }
 
 .btn:active {
-  transform: scale(0.97);
+  transform: scale(0.96);
 }
 
 .btn:disabled {
@@ -777,15 +838,18 @@ body {
   cursor: default;
 }
 
-.btn-secondary {
-  background: var(--board-tile);
-  color: var(--ink);
+.btn-ghost {
+  background: rgba(251, 243, 230, 0.1);
+  color: var(--cream);
+  border: 1px solid rgba(251, 243, 230, 0.28);
 }
 
 .btn-primary {
-  background: linear-gradient(160deg, var(--accent-gold) 0%, #d99a3f 100%);
+  background: radial-gradient(circle at 38% 30%, #fff3d6 0%, var(--accent-gold) 55%, #c78c39 100%);
   color: var(--accent-gold-ink);
-  box-shadow: 0 6px 16px rgba(217, 154, 63, 0.35);
+  box-shadow: 0 6px 16px rgba(217, 154, 63, 0.4);
+  padding-left: 34px;
+  padding-right: 34px;
 }
 
 .btn-primary:active {
@@ -797,49 +861,64 @@ body {
 .end-overlay {
   position: absolute;
   inset: 0;
-  z-index: 4;
-  background: rgba(20, 14, 40, 0.55);
+  z-index: 5;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
-  border-radius: 12px;
 }
 
 .end-overlay[hidden] {
   display: none;
 }
 
+.end-scrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 5, 20, 0.55);
+  backdrop-filter: blur(2px);
+}
+
 .end-card {
-  background: var(--cream);
-  border-radius: 20px;
-  padding: 26px 24px 22px;
+  position: relative;
+  z-index: 1;
+  background: linear-gradient(165deg, var(--cream) 0%, var(--cream-soft) 100%);
+  border-radius: 22px;
+  padding: 26px 26px 22px;
   text-align: center;
-  max-width: 320px;
+  max-width: 300px;
   width: 100%;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
-  animation: end-card-in 260ms ease both;
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.5);
+  animation: end-card-in 300ms ease both;
 }
 
 @keyframes end-card-in {
-  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .end-message {
+  font-family: 'Cinzel', serif;
   font-size: 19px;
-  font-weight: 800;
-  margin: 0 0 18px;
+  font-weight: 700;
+  margin: 2px 0 20px;
   color: var(--ink);
 }
 
 .end-actions {
   display: flex;
+  justify-content: center;
   gap: 10px;
 }
 
+.end-card .btn-ghost {
+  background: rgba(44, 36, 64, 0.08);
+  color: var(--ink);
+  border-color: transparent;
+}
+
 @media (max-width: 380px) {
-  .game-title { font-size: 34px; }
-  .level-name { font-size: 14px; }
-  .btn { font-size: 14px; padding: 12px 8px; }
+  .game-title { font-size: 36px; }
+  .level-name { font-size: 13px; }
+  .btn { font-size: 13px; padding: 11px 18px; }
 }
