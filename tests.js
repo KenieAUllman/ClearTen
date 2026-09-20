@@ -154,7 +154,12 @@ test('cascade: clearing a piece fully away lets gravity drop another piece into 
   assert.ok(Logic.boardIsEmpty(result.board));
 });
 
-// ---- V0.8: STEP GRAVITY engine tests ----
+// ---- STEP GRAVITY engine tests (V0.8) --------------------------------
+// V0.9 REMOVED Step Gravity from normal play entirely (playtesting showed
+// Settle Gravity felt better -- "I do NOT like pieces moving downward only
+// one space per turn"). Nothing in config.js or game.js calls these
+// functions anymore, but gamelogic.js still exports them intact, so these
+// regression tests stay in place to guard the preserved-but-unused code.
 
 test('STEP GRAVITY moves an unsupported piece exactly one slot, not to the floor', function () {
   var board = makeLineBoard(6);
@@ -319,33 +324,93 @@ test('hex adjacency is symmetric across the whole board (unchanged by the layere
 });
 
 // ===========================================================================
-// V0.8 -- FIVE LEVELS: one Settle Gravity control + four Step Gravity
-// levels. Baseline checks for every level, plus one structural test per
-// level proving its signature insight actually works, AND that the
-// documented tempting mistake actually produces an unsolvable board.
+// V0.9 -- SIX LEVELS, SETTLE GRAVITY ONLY, WIDE/CONTINUOUS/LAYERED REDESIGN.
+//
+// Step Gravity is gone from every shipped level. Every level is verified
+// solvable through the SAME queue mechanic the real UI uses: pieces are
+// drawn into a 3-wide window (state.currentPieces in game.js), and any of
+// the 3 currently-drawn pieces can be placed in any order -- placing one
+// draws the next undrawn piece from pieceSequence into its slot. A
+// solution's step order therefore does not have to match pieceSequence's
+// raw index order; it only has to respect "a piece must already be drawn
+// before it can be placed." replaySolution below models exactly that.
 // ===========================================================================
 
-test('there are exactly 5 levels', function () {
-  assert.strictEqual(Config.LEVELS.length, 5);
+test('there are exactly 6 levels', function () {
+  assert.strictEqual(Config.LEVELS.length, 6);
 });
 
-test('exactly one level (the control) uses Settle Gravity; the other four use Step Gravity', function () {
-  var settle = Config.LEVELS.filter(function (l) { return (l.gravityMode || 'settle') === 'settle'; });
-  var step = Config.LEVELS.filter(function (l) { return l.gravityMode === 'step'; });
-  assert.strictEqual(settle.length, 1, 'expected exactly 1 Settle Gravity level');
-  assert.strictEqual(step.length, 4, 'expected exactly 4 Step Gravity levels');
+test('no level uses Step Gravity -- gravityMode is never set to "step" anywhere in config.js', function () {
+  Config.LEVELS.forEach(function (lvl) {
+    assert.notStrictEqual(lvl.gravityMode, 'step', lvl.id + ' must not opt into Step Gravity');
+  });
 });
 
-test('at least 3 of the 5 boards are WIDE (more columns than the tallest column\'s height)', function () {
-  function isWide(layout) {
-    var byCol = {};
-    layout.forEach(function (c) { byCol[c.col] = (byCol[c.col] || 0) + 1; });
-    var columnCount = Object.keys(byCol).length;
-    var maxHeight = Math.max.apply(null, Object.keys(byCol).map(function (c) { return byCol[c]; }));
-    return columnCount >= 4 && maxHeight <= 10;
+test('no piece in any level uses 4 layers (V0.9 explicitly caps layered pieces at 3)', function () {
+  Config.LEVELS.forEach(function (lvl) {
+    lvl.pieceSequence.forEach(function (p) {
+      assert.ok(p.layers.length >= 1 && p.layers.length <= 3, lvl.id + ' piece ' + p.id + ' has ' + p.layers.length + ' layers (max allowed is 3)');
+    });
+  });
+});
+
+function isFullyConnected(lvl) {
+  var board = Logic.createBoard(lvl.layout);
+  var start = lvl.layout[0];
+  var visited = {};
+  var stack = [start];
+  visited[start.col + '_' + start.slot] = true;
+  var count = 1;
+  while (stack.length) {
+    var cur = stack.pop();
+    Logic.getNeighbors(board, cur.col, cur.slot).forEach(function (n) {
+      var k = n.col + '_' + n.slot;
+      if (!visited[k]) { visited[k] = true; count++; stack.push(n); }
+    });
   }
-  var wideCount = Config.LEVELS.filter(function (lvl) { return isWide(lvl.layout); }).length;
-  assert.ok(wideCount >= 3, 'expected at least 3 wide levels, found ' + wideCount);
+  return count === lvl.layout.length;
+}
+
+test('at least 4 of the first 5 levels are fully continuous boards (one connected region)', function () {
+  var firstFive = Config.LEVELS.slice(0, 5);
+  var continuousCount = firstFive.filter(isFullyConnected).length;
+  assert.ok(continuousCount >= 4, 'expected at least 4 of the first 5 levels fully continuous, found ' + continuousCount);
+});
+
+test('level 6 is mostly continuous (one isolated decoy cell by design, not a fragmented board)', function () {
+  var lvl = Config.LEVELS[5];
+  var board = Logic.createBoard(lvl.layout);
+  var start = lvl.layout[0];
+  var visited = {};
+  var stack = [start];
+  visited[start.col + '_' + start.slot] = true;
+  var count = 1;
+  while (stack.length) {
+    var cur = stack.pop();
+    Logic.getNeighbors(board, cur.col, cur.slot).forEach(function (n) {
+      var k = n.col + '_' + n.slot;
+      if (!visited[k]) { visited[k] = true; count++; stack.push(n); }
+    });
+  }
+  assert.strictEqual(count, lvl.layout.length - 1, 'expected exactly one isolated decoy cell excluded from the main region');
+});
+
+test('every level board is wider than it is tall (columns > max column height)', function () {
+  Config.LEVELS.forEach(function (lvl) {
+    var maxCol = Math.max.apply(null, lvl.layout.map(function (c) { return c.col; }));
+    var maxSlot = Math.max.apply(null, lvl.layout.map(function (c) { return c.slot; }));
+    var width = maxCol + 1;
+    var height = maxSlot + 1;
+    assert.ok(width > height, lvl.id + ' should be wider than tall (width=' + width + ', height=' + height + ')');
+  });
+});
+
+test('layered-piece density is substantial in every level (at least 40% of pieces carry a buried color)', function () {
+  Config.LEVELS.forEach(function (lvl) {
+    var layeredCount = lvl.pieceSequence.filter(function (p) { return p.layers.length > 1; }).length;
+    var rate = layeredCount / lvl.pieceSequence.length;
+    assert.ok(rate >= 0.4, lvl.id + ' layered rate is only ' + Math.round(rate * 100) + '%, expected at least 40%');
+  });
 });
 
 test('every level has a visibly distinct board silhouette (no two share the same column-height signature)', function () {
@@ -359,184 +424,170 @@ test('every level has a visibly distinct board silhouette (no two share the same
   assert.strictEqual(unique.length, signatures.length, 'two levels share the same column-height signature: ' + signatures.join(' | '));
 });
 
-function resolveOneTurn(lvl, board) {
-  var cascade = lvl.gravityMode === 'step'
-    ? Logic.resolveCascadeStepGravity(board, Config.CLEAR_THRESHOLD)
-    : Logic.resolveCascade(board, Config.CLEAR_THRESHOLD);
-  return cascade;
-}
-
-function replaySolution(lvl) {
-  var board = Logic.withInitialTokens(Logic.createBoard(lvl.layout), lvl.initialTokens);
-  assert.strictEqual(lvl.solution.length, lvl.pieceSequence.length,
-    lvl.id + ': solution should place every piece in the sequence');
-
-  lvl.solution.forEach(function (step, i) {
-    var piece = lvl.pieceSequence[i];
-    assert.strictEqual(piece.id, step.pieceId,
-      lvl.id + ' solution step ' + i + ' expected piece ' + step.pieceId + ' but sequence has ' + piece.id);
-    assert.ok(
-      Logic.canPlacePiece(board, piece, step.target.col, step.target.slot),
-      lvl.id + ' solution step ' + i + ' (' + piece.id + ') is not a legal placement'
-    );
-    board = Logic.placePiece(board, piece, step.target.col, step.target.slot);
-    board = resolveOneTurn(lvl, board).board;
-
-    var isLastStep = i === lvl.solution.length - 1;
-    if (!isLastStep) {
-      assert.ok(!Logic.boardIsEmpty(board),
-        lvl.id + ': board must not be empty after step ' + i + ' (' + piece.id + ') -- that would be a premature win');
-    }
-  });
-
-  assert.ok(Logic.boardIsEmpty(board), lvl.id + ': board should be completely empty after the full solution');
-  return board;
-}
-
-Config.LEVELS.forEach(function (lvl) {
-  test(lvl.id + ' (' + lvl.name + ', ' + (lvl.gravityMode || 'settle') + ' gravity) is fully solvable via its documented solution', function () {
-    replaySolution(lvl);
-  });
-
-  test(lvl.id + ': every piece carries 1-3 layers (locked mechanic)', function () {
-    lvl.pieceSequence.forEach(function (p) {
-      assert.ok(p.layers.length >= 1 && p.layers.length <= 3, lvl.id + ' piece ' + p.id + ' has ' + p.layers.length + ' layers');
-    });
-  });
-});
+// ---- Real-queue-aware solvability + mistake replay -------------------
 
 function pieceById(lvl, id) {
   return lvl.pieceSequence.filter(function (p) { return p.id === id; })[0];
 }
 
-function placeSteps(lvl, board, steps) {
-  steps.forEach(function (step) {
+// Models the exact draw mechanic in game.js: pieces 0,1,2 start drawn;
+// placing any currently-drawn piece draws the next undrawn piece from
+// pieceSequence into the vacated slot. Returns the final board, or throws
+// if a step tries to place a piece that has not been drawn yet, or an
+// illegal placement.
+function replaySteps(lvl, steps) {
+  var seq = lvl.pieceSequence;
+  var board = Logic.withInitialTokens(Logic.createBoard(lvl.layout), lvl.initialTokens);
+  var drawnUpTo = Math.min(3, seq.length);
+  var available = {};
+  for (var i = 0; i < drawnUpTo; i++) available[seq[i].id] = true;
+
+  steps.forEach(function (step, i) {
+    assert.ok(available[step.pieceId], lvl.id + ' step ' + i + ': piece ' + step.pieceId + ' has not been drawn into the 3-piece queue yet');
     var piece = pieceById(lvl, step.pieceId);
-    if (!Logic.canPlacePiece(board, piece, step.target.col, step.target.slot)) return;
+    assert.ok(Logic.canPlacePiece(board, piece, step.target.col, step.target.slot),
+      lvl.id + ' step ' + i + ' (' + piece.id + ') is not a legal placement at ' + JSON.stringify(step.target));
     board = Logic.placePiece(board, piece, step.target.col, step.target.slot);
-    board = resolveOneTurn(lvl, board).board;
+    board = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD).board;
+    delete available[step.pieceId];
+    if (drawnUpTo < seq.length) { available[seq[drawnUpTo].id] = true; drawnUpTo++; }
   });
   return board;
 }
 
-// ---- Level 1 (CONTROL, Settle Gravity): baseline tower + decoy, unchanged mechanics ----
+function replaySolution(lvl) {
+  var board = replaySteps(lvl, lvl.solution);
+  assert.ok(Logic.boardIsEmpty(board), lvl.id + ': board should be completely empty after the full documented solution');
+  return board;
+}
 
-test('level 1 (control): the decoy tower is two columns from the orange target and can never reach it', function () {
-  var lvl = Config.LEVELS[0];
-  var board = Logic.createBoard(lvl.layout);
-  lvl.layout.filter(function (c) { return c.col === 3; }).forEach(function (c) {
-    var neighborCols = Logic.getNeighbors(board, 3, c.slot).map(function (n) { return n.col; });
-    assert.ok(neighborCols.indexOf(0) === -1, 'level1 column 3 should never border column 0 (slot ' + c.slot + ')');
+Config.LEVELS.forEach(function (lvl) {
+  test(lvl.id + ' (' + lvl.name + ') is fully solvable via its documented solution, through the real 3-piece queue', function () {
+    replaySolution(lvl);
   });
 });
 
-test('level 1 (control): the tempting mistake (ROUTE placed in the decoy instead of the real tower) leaves the board unsolvable', function () {
+function swapMistake(lvl, idA, idB) {
+  var steps = lvl.solution.map(function (s) { return Object.assign({}, s, { target: Object.assign({}, s.target) }); });
+  var a = steps.find(function (s) { return s.pieceId === idA; });
+  var b = steps.find(function (s) { return s.pieceId === idB; });
+  var tmp = a.target; a.target = b.target; b.target = tmp;
+  return replaySteps(lvl, steps);
+}
+
+function retargetMistake(lvl, id, target) {
+  var steps = lvl.solution.map(function (s) { return Object.assign({}, s, { target: Object.assign({}, s.target) }); });
+  var step = steps.find(function (s) { return s.pieceId === id; });
+  step.target = target;
+  return replaySteps(lvl, steps);
+}
+
+// ---- Level 1: Wide Open Introduction -----------------------------------
+
+test('level 1: the board is fully flat and continuous (broad, shallow, no vertical funnel)', function () {
   var lvl = Config.LEVELS[0];
-  var board = Logic.withInitialTokens(Logic.createBoard(lvl.layout), lvl.initialTokens);
-  var steps = lvl.solution.map(function (s) { return Object.assign({}, s); });
-  var route = steps.find(function (s) { return s.pieceId === 'ROUTE'; });
-  route.target = { col: 3, slot: 2 };
-  board = placeSteps(lvl, board, steps);
-  assert.strictEqual(Logic.boardIsEmpty(board), false, 'placing ROUTE in the decoy should leave the board unsolvable');
-});
-
-// ---- Level 2 (STEP GRAVITY INTRO): a piece genuinely travels over several turns ----
-
-test('level 2: the board is wide and uniform (no funnel) -- every column shares the same floor and height', function () {
-  var lvl = Config.LEVELS[1];
   var heights = {};
-  lvl.layout.forEach(function (c) { heights[c.col] = (heights[c.col] || []).concat(c.slot); });
-  var cols = Object.keys(heights);
-  assert.ok(cols.length >= 5, 'expected a wide board (>=5 columns)');
-  cols.forEach(function (c) {
-    assert.deepStrictEqual(heights[c].sort(function (a, b) { return a - b; }), [0, 1, 2, 3], 'level2 column ' + c + ' should span slots 0-3 like every other column');
+  lvl.layout.forEach(function (c) { heights[c.col] = (heights[c.col] || 0) + 1; });
+  Object.keys(heights).forEach(function (c) {
+    assert.strictEqual(heights[c], 2, 'level1 column ' + c + ' should be exactly 2 tall (shallow, uniform)');
+  });
+  assert.ok(isFullyConnected(lvl), 'level1 should be one continuous board');
+});
+
+// ---- Level 2: Layer Introduction ---------------------------------------
+
+test('level 2: a clean 3-color relay (purple -> orange -> red) clears the whole board', function () {
+  var lvl = Config.LEVELS[1];
+  var board = replaySolution(lvl);
+  assert.ok(Logic.boardIsEmpty(board));
+});
+
+// ---- Level 3: Uneven Floor ----------------------------------------------
+
+test('level 3: the seam column sits at the bottom of the dip and touches both the purple and orange regions', function () {
+  var lvl = Config.LEVELS[2];
+  var board = Logic.createBoard(lvl.layout);
+  var seamCells = lvl.layout.filter(function (c) { return c.col === 3; });
+  seamCells.forEach(function (c) {
+    var neighborCols = Logic.getNeighbors(board, 3, c.slot).map(function (n) { return n.col; });
+    assert.ok(neighborCols.indexOf(2) !== -1, 'level3 seam should border column 2');
+    assert.ok(neighborCols.indexOf(4) !== -1, 'level3 seam should border column 4');
   });
 });
 
-test('level 2: a piece placed near the top genuinely takes multiple turns to reach the floor (does not teleport)', function () {
-  var lvl = Config.LEVELS[1];
-  var board = Logic.createBoard(lvl.layout);
-  var piece = pieceById(lvl, 'P1');
-  board = Logic.placePiece(board, piece, 0, 3);
-  var afterTurn1 = Logic.resolveCascadeStepGravity(board, 10).board;
-  assert.strictEqual(Logic.getActiveColor(afterTurn1, 0, 2), 'purple', 'after 1 turn, should be at slot 2 (one step down), not slot 0');
-  var afterTurn2 = Logic.resolveCascadeStepGravity(afterTurn1, 10).board;
-  assert.strictEqual(Logic.getActiveColor(afterTurn2, 0, 1), 'purple', 'after 2 turns, should be at slot 1');
-});
-
-// ---- Level 3 (CROSSING PATHS): future POSITION, not just future column ----
-
-test('level 3: the elevator column\'s top has nothing to touch -- it only enters range after descending several turns', function () {
+test('level 3: the tempting mistake (TRAP routed into the col0 dead end instead of the seam) leaves the board unsolvable', function () {
   var lvl = Config.LEVELS[2];
-  var board = Logic.createBoard(lvl.layout);
-  var topNeighbors = Logic.getNeighbors(board, 1, 15).map(function (n) { return n.col; });
-  assert.deepStrictEqual(topNeighbors, [1], 'level3 column 1 slot 15 should only touch its own column (slot 14)');
-  var lowNeighbors = Logic.getNeighbors(board, 1, 8).map(function (n) { return n.col; });
-  assert.ok(lowNeighbors.indexOf(0) !== -1 && lowNeighbors.indexOf(2) !== -1, 'level3 column 1 slot 8 should border both column 0 and column 2');
+  var board = swapMistake(lvl, 'TRAP', 'P2');
+  assert.strictEqual(Logic.boardIsEmpty(board), false, 'using the dead end for TRAP should leave the board unsolvable');
 });
 
-test('level 3: the tempting mistake (ELEVATOR dropped LAST instead of FIRST) leaves it stuck mid-descent, board unsolvable', function () {
-  var lvl = Config.LEVELS[2];
-  var board = Logic.createBoard(lvl.layout);
-  var steps = lvl.solution.filter(function (s) { return s.pieceId !== 'ELEVATOR'; });
-  steps.push({ pieceId: 'ELEVATOR', target: { col: 1, slot: 15 } });
-  board = placeSteps(lvl, board, steps);
-  assert.strictEqual(Logic.boardIsEmpty(board), false, 'dropping ELEVATOR last should leave the board unsolvable');
-});
+// ---- Level 4: Horizontal Tradeoffs --------------------------------------
 
-// ---- Level 4 (DELAY THE CLEAR): the dead-end wave is free to complete early, but not with the wrong piece ----
-
-test('level 4: the dead-end wave (column 0) is two columns from the orange target and structurally isolated', function () {
+test('level 4: the dead-end decoy column is structurally isolated from the seam', function () {
   var lvl = Config.LEVELS[3];
   var board = Logic.createBoard(lvl.layout);
   lvl.layout.filter(function (c) { return c.col === 0; }).forEach(function (c) {
     var neighborCols = Logic.getNeighbors(board, 0, c.slot).map(function (n) { return n.col; });
-    assert.ok(neighborCols.indexOf(3) === -1, 'level4 column 0 should never border column 3 (the orange target)');
+    assert.ok(neighborCols.indexOf(3) === -1, 'level4 column 0 should never border column 3 (the seam)');
   });
 });
 
-test('level 4: the tempting mistake (ELEVATOR and QUICK swapped between the two waves) leaves the board unsolvable', function () {
+test('level 4: the tempting mistake (TRAP1 routed into the dead end instead of the seam) leaves the board unsolvable', function () {
   var lvl = Config.LEVELS[3];
-  var board = Logic.createBoard(lvl.layout);
-  var steps = lvl.solution.map(function (s) { return Object.assign({}, s); });
-  var quick = steps.find(function (s) { return s.pieceId === 'QUICK'; });
-  var elevator = steps.find(function (s) { return s.pieceId === 'ELEVATOR'; });
-  var tmp = quick.target; quick.target = elevator.target; elevator.target = tmp;
-  board = placeSteps(lvl, board, steps);
-  assert.strictEqual(Logic.boardIsEmpty(board), false, 'using ELEVATOR for the dead-end wave should leave the board unsolvable');
+  var board = swapMistake(lvl, 'TRAP1', 'P2');
+  assert.strictEqual(Logic.boardIsEmpty(board), false, 'using the dead end for TRAP1 should leave the board unsolvable');
 });
 
-// ---- Level 5 (MOTION PUZZLE): future color AND future position, plus a 3-stage cascade ----
-
-test('level 5: the tower\'s floor borders BOTH the orange target and the red target at once', function () {
-  var lvl = Config.LEVELS[4];
-  var board = Logic.createBoard(lvl.layout);
-  var neighborCols = Logic.getNeighbors(board, 3, 0).map(function (n) { return n.col; });
-  assert.ok(neighborCols.indexOf(2) !== -1 && neighborCols.indexOf(4) !== -1, 'level5 column 3 slot 0 should border both column 2 and column 4');
-});
+// ---- Level 5: Layered Strategy -------------------------------------------
 
 test('level 5: the documented solution produces a 3-stage cascade (purple, then orange, then red)', function () {
   var lvl = Config.LEVELS[4];
   var board = Logic.withInitialTokens(Logic.createBoard(lvl.layout), lvl.initialTokens);
-  board = placeSteps(lvl, board, lvl.solution.slice(0, -1));
+  var allButLast = lvl.solution.slice(0, -1);
+  board = replaySteps(lvl, allButLast);
   var last = lvl.solution[lvl.solution.length - 1];
   board = Logic.placePiece(board, pieceById(lvl, last.pieceId), last.target.col, last.target.slot);
-  var cascade = Logic.resolveCascadeStepGravity(board, Config.CLEAR_THRESHOLD);
+  var cascade = Logic.resolveCascade(board, Config.CLEAR_THRESHOLD);
   var clearColors = cascade.events.filter(function (e) { return e.groups.length > 0; })
     .map(function (e) { return e.groups[0].color; });
   assert.deepStrictEqual(clearColors, ['purple', 'orange', 'red'], 'expected purple, then orange, then red to clear in that order');
   assert.ok(Logic.boardIsEmpty(cascade.board));
 });
 
-test('level 5: the tempting mistake (ELEVATOR finishes the dead end instead of the tower) leaves the board unsolvable', function () {
+test('level 5: the tempting mistake (TRAP1 routed into the dead end instead of the seam) leaves the board unsolvable', function () {
   var lvl = Config.LEVELS[4];
+  var board = swapMistake(lvl, 'TRAP1', 'P2');
+  assert.strictEqual(Logic.boardIsEmpty(board), false, 'using the dead end for TRAP1 should leave the board unsolvable');
+});
+
+// ---- Level 6: Signature ClearTen Test ------------------------------------
+
+test('level 6: TWO independent trap decisions exist -- TRAP_A (the main seam) and TRAP_B (its own correct cell vs. the isolated decoy)', function () {
+  var lvl = Config.LEVELS[5];
+  var ids = lvl.pieceSequence.map(function (p) { return p.id; });
+  assert.ok(ids.indexOf('TRAP_A1') !== -1 && ids.indexOf('TRAP_A2') !== -1 && ids.indexOf('TRAP_B') !== -1,
+    'level6 should define both the TRAP_A pair and TRAP_B');
+});
+
+test('level 6: mistake A (TRAP_A1 routed into the col0 dead end instead of the main seam) independently leaves the board unsolvable', function () {
+  var lvl = Config.LEVELS[5];
+  var board = swapMistake(lvl, 'TRAP_A1', 'P2');
+  assert.strictEqual(Logic.boardIsEmpty(board), false, 'using the dead end for TRAP_A1 should leave the board unsolvable');
+});
+
+test('level 6: mistake B (TRAP_B routed into the isolated decoy column instead of its own cell) independently leaves the board unsolvable', function () {
+  var lvl = Config.LEVELS[5];
+  var decoyCell = Config.LEVELS[5].layout.filter(function (c) { return c.col === 9; })[0];
+  var board = retargetMistake(lvl, 'TRAP_B', { col: decoyCell.col, slot: decoyCell.slot });
+  assert.strictEqual(Logic.boardIsEmpty(board), false, 'using the isolated decoy for TRAP_B should leave the board unsolvable');
+});
+
+test('level 6: the isolated decoy cell (col9) is never adjacent to the main red region (col7)', function () {
+  var lvl = Config.LEVELS[5];
   var board = Logic.createBoard(lvl.layout);
-  var steps = lvl.solution.map(function (s) { return Object.assign({}, s); });
-  var quick = steps.find(function (s) { return s.pieceId === 'QUICK'; });
-  var elevator = steps.find(function (s) { return s.pieceId === 'ELEVATOR'; });
-  var tmp = quick.target; quick.target = elevator.target; elevator.target = tmp;
-  board = placeSteps(lvl, board, steps);
-  assert.strictEqual(Logic.boardIsEmpty(board), false, 'using ELEVATOR for the dead end should leave the board unsolvable');
+  var decoyCell = lvl.layout.filter(function (c) { return c.col === 9; })[0];
+  var neighborCols = Logic.getNeighbors(board, decoyCell.col, decoyCell.slot).map(function (n) { return n.col; });
+  assert.ok(neighborCols.indexOf(7) === -1, 'level6 col9 should never border col7 (2+ columns apart)');
 });
 
 console.log('\n' + passed + ' passed, ' + failed + ' failed');
