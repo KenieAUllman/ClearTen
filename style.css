@@ -662,9 +662,19 @@ body {
   animation: emphasize-pulse 480ms ease-in-out 2;
 }
 
+/* Buried-color pips + their shared backing plate (V0.12 readability fix).
+   The plate guarantees every pip stays readable regardless of the active
+   circle's own color or whatever's behind it in the scene -- pips are
+   never left to rely on edge contrast alone. */
+.layer-pip-backing {
+  fill: rgba(17, 12, 38, 0.72);
+  stroke: rgba(251, 243, 230, 0.5);
+  stroke-width: 0.18;
+}
+
 .layer-pip {
-  stroke: rgba(255, 255, 255, 0.7);
-  stroke-width: 0.2;
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 0.22;
 }
 
 @keyframes pop-in {

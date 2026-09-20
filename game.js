@@ -82,29 +82,45 @@
     return points.join(' ');
   }
 
-  // A layered piece's visual (V0.11: pips moved INSIDE the active circle's
-  // own footprint, tight against its bottom edge, rather than sitting
-  // below/outside it -- the active color must still visually dominate
-  // ~85-90% of the piece, and buried colors must never make a piece read
-  // as physically taller than a plain one). One large circle for the
-  // active color, with tiny rounded pips overlapping its lower rim --
-  // left-to-right in order (leftmost = next color, rightmost = the one
-  // after that). Never more than 2 pips: this game limits pieces to 2-3
-  // layers total.
-  var LAYER_MAIN_RADIUS = HEX_SIZE * 0.64;
-  var LAYER_PIP_RADIUS = HEX_SIZE * 0.1;
-  var LAYER_PIP_ROW_Y = LAYER_MAIN_RADIUS * 0.6;
-  var LAYER_PIP_SPACING = LAYER_PIP_RADIUS * 2 + HEX_SIZE * 0.05;
+  // A layered piece's visual.
+  //
+  // V0.12 BURIED-LAYER READABILITY FIX: V0.11 moved the buried-color pips
+  // INSIDE the active circle's own radius to keep the piece compact --
+  // but layerCircleSpecs still listed pips BEFORE the active spec, so
+  // buildPieceVisual painted the active circle LAST, on top, completely
+  // covering the pips wherever they overlapped (SVG paints later document
+  // elements over earlier ones). Combined with the pips having been
+  // shrunk, buried colors became fully invisible, not just subtle -- a
+  // genuine occlusion bug, not a contrast/size issue alone.
+  //
+  // The fix: pips are drawn AFTER the active circle (so they can never be
+  // covered by it, regardless of any future size/position tweaks), sit
+  // just below the active circle's own rim (a small, deliberate overlap
+  // so they read as "attached tabs," not floating debris) rather than
+  // buried inside its footprint, are backed by one dark contrast plate so
+  // they stay legible against ANY active/buried color combination, and
+  // are large enough to read at a glance on a phone screen. A piece with
+  // no buried colors shows NO pips and NO backing plate at all.
+  //
+  // ORDER CONVENTION (unchanged, documented): left = the NEXT color this
+  // piece reveals, right = the color after that. Never more than 2 pips
+  // -- this game limits pieces to 2-3 layers total.
+  var LAYER_MAIN_RADIUS = HEX_SIZE * 0.56;
+  var LAYER_PIP_RADIUS = HEX_SIZE * 0.16;
+  var LAYER_PIP_ROW_Y = LAYER_MAIN_RADIUS + LAYER_PIP_RADIUS * 0.35;
+  var LAYER_PIP_SPACING = LAYER_PIP_RADIUS * 2.5;
 
   function layerCircleSpecs(layers) {
     var buriedCount = layers.length - 1;
     var specs = [];
+    // Active spec FIRST -- see the paint-order note above; this is the
+    // single most load-bearing line in this function.
+    specs.push({ cx: 0, cy: 0, r: LAYER_MAIN_RADIUS, color: layers[0], active: true, layerIndex: 0 });
     for (var i = 1; i < layers.length; i++) {
       var pipIndex = i - 1;
       var offsetFromCenter = (pipIndex - (buriedCount - 1) / 2) * LAYER_PIP_SPACING;
       specs.push({ cx: offsetFromCenter, cy: LAYER_PIP_ROW_Y, r: LAYER_PIP_RADIUS, color: layers[i], active: false, layerIndex: i });
     }
-    specs.push({ cx: 0, cy: 0, r: LAYER_MAIN_RADIUS, color: layers[0], active: true, layerIndex: 0 });
     return specs;
   }
 
@@ -113,55 +129,73 @@
   // pieces (wrapped in a positioned outer group) and queue previews
   // (dropped straight into a small dedicated SVG), so the player learns
   // one visual language for "what's in this piece" everywhere it appears.
-  // V0.10: the active layer renders as a glossy gradient circle (defined
-  // once in index.html's shared <defs> and referenced by url(#id) here --
-  // url() references resolve against the whole document, not just the
-  // local <svg> root, so one shared gradient set covers the board AND
-  // every separate piece-tray <svg>). Buried layers render as small
-  // rounded "pip" rects in a tight row -- a narrow, readable band rather
-  // than bulky dots, per the buried-color legibility pass.
+  // The active layer renders as a glossy gradient circle (defined once in
+  // index.html's shared <defs> and referenced by url(#id) here -- url()
+  // references resolve against the whole document, not just the local
+  // <svg> root, so one shared gradient set covers the board AND every
+  // separate piece-tray <svg>).
   function fillForColor(color) {
     return 'url(#grad-' + color + ')';
   }
 
   function buildPieceVisual(layers) {
     var g = svgEl('g', { class: 'piece-visual' });
-    layerCircleSpecs(layers).forEach(function (spec) {
-      if (spec.active) {
-        g.appendChild(svgEl('circle', {
-          cx: spec.cx,
-          cy: spec.cy,
-          r: spec.r,
-          fill: fillForColor(spec.color),
-          class: 'layer-circle layer-active',
-          'data-layer-index': spec.layerIndex
-        }));
-        // A small offset highlight ellipse -- the "polished stone/enamel"
-        // glint that makes the token read as a tactile object rather than
-        // a flat filled shape. Never intercepts pointer events or carries
-        // gameplay meaning.
-        g.appendChild(svgEl('ellipse', {
-          cx: spec.cx - spec.r * 0.32,
-          cy: spec.cy - spec.r * 0.4,
-          rx: spec.r * 0.32,
-          ry: spec.r * 0.2,
-          class: 'layer-active-highlight',
-          'pointer-events': 'none'
-        }));
-      } else {
+    var specs = layerCircleSpecs(layers);
+    var activeSpec = specs[0];
+    var pipSpecs = specs.slice(1);
+
+    // 1. Active circle + its gloss highlight, drawn FIRST (bottom of
+    // paint order) so anything drawn after it -- specifically the pips
+    // below -- can never be hidden underneath it.
+    g.appendChild(svgEl('circle', {
+      cx: activeSpec.cx,
+      cy: activeSpec.cy,
+      r: activeSpec.r,
+      fill: fillForColor(activeSpec.color),
+      class: 'layer-circle layer-active',
+      'data-layer-index': activeSpec.layerIndex
+    }));
+    g.appendChild(svgEl('ellipse', {
+      cx: activeSpec.cx - activeSpec.r * 0.32,
+      cy: activeSpec.cy - activeSpec.r * 0.4,
+      rx: activeSpec.r * 0.32,
+      ry: activeSpec.r * 0.2,
+      class: 'layer-active-highlight',
+      'pointer-events': 'none'
+    }));
+
+    // 2. Buried-color pips (only when there ARE buried colors -- a
+    // 1-layer piece gets no backing plate and no pips, never a fake
+    // empty indicator). One shared dark backing plate sits behind the
+    // whole row so each pip's color stays readable regardless of what
+    // color the active circle or the scene behind it happens to be.
+    if (pipSpecs.length > 0) {
+      var minX = Math.min.apply(null, pipSpecs.map(function (s) { return s.cx - s.r; }));
+      var maxX = Math.max.apply(null, pipSpecs.map(function (s) { return s.cx + s.r; }));
+      var padX = LAYER_PIP_RADIUS * 0.5;
+      var padY = LAYER_PIP_RADIUS * 0.45;
+      g.appendChild(svgEl('rect', {
+        x: minX - padX,
+        y: LAYER_PIP_ROW_Y - LAYER_PIP_RADIUS - padY,
+        width: (maxX - minX) + padX * 2,
+        height: LAYER_PIP_RADIUS * 2 + padY * 2,
+        rx: LAYER_PIP_RADIUS * 0.8,
+        class: 'layer-pip-backing'
+      }));
+      pipSpecs.forEach(function (spec) {
         var pipSize = spec.r * 2;
         g.appendChild(svgEl('rect', {
           x: spec.cx - spec.r,
           y: spec.cy - spec.r,
           width: pipSize,
           height: pipSize,
-          rx: spec.r * 0.55,
+          rx: spec.r * 0.4,
           fill: fillForColor(spec.color),
           class: 'layer-circle layer-pip',
           'data-layer-index': spec.layerIndex
         }));
-      }
-    });
+      });
+    }
     return g;
   }
 
