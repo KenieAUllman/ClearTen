@@ -4,161 +4,47 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>ClearTen</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Quicksand:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Shared SVG resources referenced by url(#id) from every SVG in the
-       document, regardless of which <svg> root they live in -- id
-       references resolve against the whole HTML document, not just their
-       local <svg> root, so one shared <defs> block covers the board, the
-       piece-tray previews, and the mascot.
-
-       ASSET SLOT NOTE: `goo-tray` fuses per-cell circles into one soft
-       organic board silhouette entirely in SVG filters (no image asset).
-       If/when a real sculpted-stone board texture illustration exists,
-       it can replace `#well-empty`/`#tray-fill`'s flat gradients as a
-       <pattern> here without touching game.js's rendering logic. -->
-  <svg class="shared-defs" aria-hidden="true">
-    <defs>
-      <radialGradient id="grad-red" cx="35%" cy="28%" r="80%">
-        <stop offset="0%" stop-color="#ffb3a3" />
-        <stop offset="45%" stop-color="#ea6b5c" />
-        <stop offset="80%" stop-color="#c4443f" />
-        <stop offset="100%" stop-color="#93302f" />
-      </radialGradient>
-      <radialGradient id="grad-purple" cx="35%" cy="28%" r="80%">
-        <stop offset="0%" stop-color="#d9c6ff" />
-        <stop offset="45%" stop-color="#9a7bdc" />
-        <stop offset="80%" stop-color="#6d51ab" />
-        <stop offset="100%" stop-color="#493878" />
-      </radialGradient>
-      <radialGradient id="grad-orange" cx="35%" cy="28%" r="80%">
-        <stop offset="0%" stop-color="#ffdca3" />
-        <stop offset="45%" stop-color="#f5a94f" />
-        <stop offset="80%" stop-color="#d67f2c" />
-        <stop offset="100%" stop-color="#9c561a" />
-      </radialGradient>
-
-      <radialGradient id="well-empty" cx="42%" cy="36%" r="75%">
-        <stop offset="0%" stop-color="#fff8ec" stop-opacity="0.9" />
-        <stop offset="45%" stop-color="#e7dac0" stop-opacity="0.55" />
-        <stop offset="100%" stop-color="#5b4a30" stop-opacity="0.55" />
-      </radialGradient>
-
-      <radialGradient id="tray-fill" cx="50%" cy="22%" r="90%">
-        <stop offset="0%" stop-color="#d9c9a3" />
-        <stop offset="55%" stop-color="#b89b6c" />
-        <stop offset="100%" stop-color="#7c623f" />
-      </radialGradient>
-
-      <filter id="piece-shadow" x="-60%" y="-60%" width="220%" height="220%">
-        <feDropShadow dx="0" dy="0.55" stdDeviation="0.55" flood-color="#1a1030" flood-opacity="0.45" />
-      </filter>
-
-      <!-- Fuses many overlapping circles (one per board cell) into one
-           smooth, organic tray silhouette -- the "metaball" technique:
-           blur, then sharpen alpha back up past a threshold. This is what
-           replaces the old hex-outline board with a sculpted, continuous
-           puzzle surface while the underlying cell positions stay exactly
-           the same hex coordinates gamelogic.js already computes. -->
-      <filter id="goo-tray" x="-40%" y="-40%" width="180%" height="180%">
-        <feGaussianBlur in="SourceGraphic" stdDeviation="2.1" result="blur" />
-        <feColorMatrix in="blur" mode="matrix"
-          values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 22 -10" result="tray" />
-        <feComposite in="tray" in2="tray" operator="atop" />
-      </filter>
-
-      <filter id="soft-glow" x="-80%" y="-80%" width="260%" height="260%">
-        <feGaussianBlur stdDeviation="3" />
-      </filter>
-    </defs>
-  </svg>
-
-  <div class="app" id="app">
-
-    <!-- ============================= TITLE SCREEN ============================= -->
-    <section class="screen title-screen" id="title-screen">
-      <div class="scene scene--title" id="scene-title" aria-hidden="true"></div>
-      <div class="title-content">
-        <div class="mascot-wrap mascot-wrap--title" id="title-mascot"></div>
-        <h1 class="game-title">ClearTen</h1>
-        <p class="tagline">Small puzzles. Big places.</p>
-        <button type="button" class="btn btn-primary btn-play" id="play-btn">Play</button>
+  <div class="app">
+    <header class="top-bar">
+      <div class="title-group">
+        <h1 class="title">ClearTen</h1>
+        <div class="level-name" id="level-name"></div>
       </div>
-    </section>
+    </header>
 
-    <!-- ============================== MAP SCREEN =============================== -->
-    <section class="screen map-screen" id="map-screen" hidden>
-      <div class="scene scene--map" id="scene-map" aria-hidden="true"></div>
-      <header class="map-header">
-        <h2 class="map-title">ClearTen</h2>
-        <p class="map-subtitle" id="map-subtitle">Choose where to go next.</p>
-      </header>
-      <div class="map-path" id="map-path"></div>
-    </section>
+    <div id="level-select" class="level-select" aria-label="Developer level select"></div>
 
-    <!-- ============================== GAME SCREEN ============================== -->
-    <section class="screen game-screen" id="game-screen" hidden>
-      <div class="scene scene--game" id="scene-game" aria-hidden="true"></div>
-
-      <header class="top-bar">
-        <button type="button" class="icon-btn" id="map-btn" aria-label="Back to map">
-          <svg viewBox="0 0 24 24" width="18" height="18"><path d="M9 20L3 17.5V4.5L9 7M9 20L15 17.5M9 20V7M15 17.5L21 20V7L15 4.5M15 17.5V4.5M9 7L15 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>
-        </button>
-        <div class="title-group">
-          <div class="region-name" id="region-name"></div>
-          <div class="level-name" id="level-name"></div>
-        </div>
-        <div id="level-select" class="level-select" aria-label="Developer level select" hidden></div>
-      </header>
-
-      <!-- TEMPORARY DEBUG PANEL (V0.13): 1/2/3-layer readability reference,
-           built from the exact same renderPiecePreview() used for the real
-           current-pieces tray -- not a mockup. Remove this whole <div> once
-           buried-layer readability is confirmed good; see game.js's
-           renderLayerDebugPanel(). -->
-      <div class="layer-debug-panel" id="layer-debug-panel"></div>
-
-      <main class="board-area">
-        <div id="intro-banner" class="intro-banner" hidden>
-          <p id="intro-banner-text"></p>
-        </div>
-        <div id="clear-callout" class="clear-callout" hidden>10+ CLEAR!</div>
-
-        <div class="board-stage">
-          <svg id="board-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
-        </div>
-
-        <div class="board-mascot-perch" id="board-mascot"></div>
-
-        <div id="end-overlay" class="end-overlay" hidden>
-          <div class="end-scrim"></div>
-          <div class="end-card">
-            <div class="mascot-wrap mascot-wrap--end" id="end-mascot"></div>
-            <p id="end-message" class="end-message"></p>
-            <div class="end-actions">
-              <button type="button" id="end-action-btn" class="btn btn-primary"></button>
-              <button type="button" id="end-map-btn" class="btn btn-ghost">Map</button>
-            </div>
+    <main class="board-area">
+      <div id="intro-banner" class="intro-banner" hidden>
+        <p id="intro-banner-text"></p>
+      </div>
+      <div id="clear-callout" class="clear-callout" hidden>10+ CLEAR!</div>
+      <svg id="board-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
+      <div id="end-overlay" class="end-overlay" hidden>
+        <div class="end-card">
+          <p id="end-message" class="end-message"></p>
+          <div class="end-actions">
+            <button id="end-action-btn" class="btn btn-primary"></button>
           </div>
         </div>
-      </main>
+      </div>
+    </main>
 
-      <footer class="bottom-bar">
+    <footer class="bottom-bar">
+      <div class="pieces-section">
         <div id="current-pieces" class="piece-row current-row"></div>
-        <div class="controls-row">
-          <!-- V0.7: Undo is a developer/debug-only tool now (see DEBUG in
-               game.js) -- normal play only has Restart. This button stays
-               hidden unless DEBUG is true. -->
-          <button type="button" id="undo-btn" class="btn btn-ghost" hidden>Undo (debug)</button>
-          <button type="button" id="restart-btn" class="btn btn-ghost">Restart</button>
-        </div>
-      </footer>
-    </section>
-
+      </div>
+      <div class="controls-row">
+        <!-- V0.7: Undo is a developer/debug-only tool now (see DEBUG in
+             game.js) -- normal play only has Restart. This button stays
+             hidden unless DEBUG is true. -->
+        <button id="undo-btn" class="btn btn-secondary" hidden>Undo (debug)</button>
+        <button id="restart-btn" class="btn btn-secondary">Restart</button>
+      </div>
+    </footer>
   </div>
 
   <script src="gamelogic.js"></script>

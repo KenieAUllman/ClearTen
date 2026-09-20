@@ -101,10 +101,6 @@
   var level1 = {
     id: 'level1',
     name: 'Level 1: Wide Open',
-    // V0.10: `region` is purely presentational flavor for the title/map/
-    // scenic-backdrop pass -- game.js reads it for display only, nothing
-    // in gamelogic.js or the solvability tests touches it.
-    region: 'Moonlit Peaks',
     introText: 'Connect 10 matching top colors. Buried colors appear next.',
     layout: layoutFromColumns([
       { floor: 0, height: 2 }, { floor: 0, height: 2 }, { floor: 0, height: 2 }, { floor: 0, height: 2 },
@@ -166,8 +162,7 @@
   var level2 = {
     id: 'level2',
     name: 'Level 2: Layer Introduction',
-    region: 'Floating Isles',
-    introText: 'Cleared colors reveal what’s underneath.',
+    introText: null,
     layout: layoutFromColumns([
       { floor: 0, height: 2 }, { floor: 0, height: 3 }, { floor: 0, height: 2 }, { floor: 0, height: 3 },
       { floor: 0, height: 2 }, { floor: 0, height: 3 }, { floor: 0, height: 2 }, { floor: 0, height: 3 }
@@ -229,8 +224,7 @@
   var level3 = {
     id: 'level3',
     name: 'Level 3: Uneven Floor',
-    region: 'Enchanted Forest',
-    introText: 'Pieces fall straight down when placed.',
+    introText: null,
     layout: layoutFromColumns([
       { floor: 1, height: 2 }, // col0: dead-end plain purple
       { floor: 1, height: 3 }, // col1: layered purple/orange
@@ -290,8 +284,7 @@
   var level4 = {
     id: 'level4',
     name: 'Level 4: Horizontal Tradeoffs',
-    region: 'Glowing Coast',
-    introText: 'Where a piece lands can matter more than when.',
+    introText: null,
     layout: layoutFromColumns([
       { floor: 1, height: 2 }, // col0: dead-end plain purple
       { floor: 1, height: 3 }, // col1: layered purple/orange
@@ -356,8 +349,7 @@
   var level5 = {
     id: 'level5',
     name: 'Level 5: Layered Strategy',
-    region: 'Autumn Valley',
-    introText: 'Buried colors are next turn’s plan.',
+    introText: null,
     layout: layoutFromColumns([
       { floor: 3, height: 2 }, // col0: dead-end plain purple, high on the slope
       { floor: 0, height: 3 }, // col1: purple, layered
@@ -426,7 +418,6 @@
   var level6 = {
     id: 'level6',
     name: 'Level 6: Signature Puzzle',
-    region: 'Crystal Cavern',
     introText: null,
     layout: layoutFromColumns([
       { floor: 1, height: 2 }, // col0: dead-end plain purple (decoy A)
