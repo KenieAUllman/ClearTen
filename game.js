@@ -84,31 +84,35 @@
 
   // A layered piece's visual.
   //
-  // V0.12 BURIED-LAYER READABILITY FIX: V0.11 moved the buried-color pips
-  // INSIDE the active circle's own radius to keep the piece compact --
-  // but layerCircleSpecs still listed pips BEFORE the active spec, so
-  // buildPieceVisual painted the active circle LAST, on top, completely
-  // covering the pips wherever they overlapped (SVG paints later document
-  // elements over earlier ones). Combined with the pips having been
-  // shrunk, buried colors became fully invisible, not just subtle -- a
-  // genuine occlusion bug, not a contrast/size issue alone.
+  // V0.12 fixed an occlusion bug (pips were painted UNDER the active
+  // circle and fully hidden). V0.13 fixes a size bug the occlusion fix
+  // didn't address: measured live in a real browser at a phone viewport
+  // (390px wide) on the widest board (Level 6, 10 columns), a board
+  // piece's pip rendered at only ~6.9 real CSS pixels -- its RATIO to the
+  // active token (~28%) was already within spec, but board cells on a
+  // wide level are small in absolute screen terms, and a correctly-
+  // proportioned pip inside a small cell is still a small pip. The DOM
+  // elements themselves were always present, unclipped, and correctly
+  // colored (verified via getBoundingClientRect/computed style, not
+  // assumed) -- this was purely a "too small on screen" problem, not a
+  // rendering, clipping, or z-order bug.
   //
-  // The fix: pips are drawn AFTER the active circle (so they can never be
-  // covered by it, regardless of any future size/position tweaks), sit
-  // just below the active circle's own rim (a small, deliberate overlap
-  // so they read as "attached tabs," not floating debris) rather than
-  // buried inside its footprint, are backed by one dark contrast plate so
-  // they stay legible against ANY active/buried color combination, and
-  // are large enough to read at a glance on a phone screen. A piece with
-  // no buried colors shows NO pips and NO backing plate at all.
+  // Fix: pips are now substantially larger in absolute terms, and sit
+  // MORE overlapped onto the active circle's own lower area (safe now
+  // that pips always paint on top of it, per V0.12) rather than mostly
+  // below it -- this lets pip diameter grow a lot without growing the
+  // piece's total footprint by nearly as much, so bigger pips still fit
+  // safely inside one hex cell without colliding with a neighbor's
+  // piece. A piece with no buried colors still shows NO pips and NO
+  // backing plate at all.
   //
   // ORDER CONVENTION (unchanged, documented): left = the NEXT color this
   // piece reveals, right = the color after that. Never more than 2 pips
   // -- this game limits pieces to 2-3 layers total.
-  var LAYER_MAIN_RADIUS = HEX_SIZE * 0.56;
-  var LAYER_PIP_RADIUS = HEX_SIZE * 0.16;
-  var LAYER_PIP_ROW_Y = LAYER_MAIN_RADIUS + LAYER_PIP_RADIUS * 0.35;
-  var LAYER_PIP_SPACING = LAYER_PIP_RADIUS * 2.5;
+  var LAYER_MAIN_RADIUS = HEX_SIZE * 0.58;
+  var LAYER_PIP_RADIUS = HEX_SIZE * 0.25;
+  var LAYER_PIP_ROW_Y = LAYER_MAIN_RADIUS * 0.8;
+  var LAYER_PIP_SPACING = LAYER_PIP_RADIUS * 2.3;
 
   function layerCircleSpecs(layers) {
     var buriedCount = layers.length - 1;
@@ -366,6 +370,7 @@
   var introBannerText = document.getElementById('intro-banner-text');
   var clearCallout = document.getElementById('clear-callout');
   var levelSelectEl = document.getElementById('level-select');
+  var layerDebugPanelEl = document.getElementById('layer-debug-panel');
   var appEl = document.getElementById('app');
   var titleScreenEl = document.getElementById('title-screen');
   var mapScreenEl = document.getElementById('map-screen');
@@ -794,6 +799,41 @@
     return svg;
   }
 
+  // TEMPORARY DEBUG PANEL (V0.13): a fixed 1/2/3-layer reference, built
+  // from the exact same renderPiecePreview() the real current-pieces tray
+  // uses -- if these examples are clear, the piece component itself is
+  // fine and any remaining problem is specific to board/tray placement;
+  // if these examples are ALSO unclear, the problem is in the shared
+  // component itself. Remove this function, its call below, and the
+  // #layer-debug-panel element in index.html once readability is confirmed.
+  function renderLayerDebugPanel() {
+    if (!layerDebugPanelEl) return;
+    layerDebugPanelEl.innerHTML = '';
+    var title = document.createElement('div');
+    title.className = 'layer-debug-title';
+    title.textContent = 'DEBUG: layer readability test';
+    layerDebugPanelEl.appendChild(title);
+
+    var examples = [
+      { layers: ['red'], caption: '1-layer: Red' },
+      { layers: ['purple', 'orange'], caption: '2-layer: Purple → Orange' },
+      { layers: ['purple', 'orange', 'red'], caption: '3-layer: Purple → Orange → Red' }
+    ];
+    examples.forEach(function (ex) {
+      var item = document.createElement('div');
+      item.className = 'layer-debug-item';
+      var swatch = document.createElement('div');
+      swatch.className = 'layer-debug-swatch';
+      swatch.appendChild(renderPiecePreview({ id: 'debug', layers: ex.layers }));
+      var caption = document.createElement('div');
+      caption.className = 'layer-debug-caption';
+      caption.textContent = ex.caption;
+      item.appendChild(swatch);
+      item.appendChild(caption);
+      layerDebugPanelEl.appendChild(item);
+    });
+  }
+
   function renderPieces() {
     currentPiecesEl.innerHTML = '';
     state.currentPieces.forEach(function (piece, i) {
@@ -1162,6 +1202,7 @@
   renderSceneInto(sceneMapEl);
   renderSceneInto(sceneGameEl);
   renderMascotInto(titleMascotEl, 'idle');
+  renderLayerDebugPanel();
   resetGame();
   showScreen('title');
 })();

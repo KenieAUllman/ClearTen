@@ -115,6 +115,13 @@
         <div id="level-select" class="level-select" aria-label="Developer level select" hidden></div>
       </header>
 
+      <!-- TEMPORARY DEBUG PANEL (V0.13): 1/2/3-layer readability reference,
+           built from the exact same renderPiecePreview() used for the real
+           current-pieces tray -- not a mockup. Remove this whole <div> once
+           buried-layer readability is confirmed good; see game.js's
+           renderLayerDebugPanel(). -->
+      <div class="layer-debug-panel" id="layer-debug-panel"></div>
+
       <main class="board-area">
         <div id="intro-banner" class="intro-banner" hidden>
           <p id="intro-banner-text"></p>
