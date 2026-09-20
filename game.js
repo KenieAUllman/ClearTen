@@ -110,17 +110,42 @@
   // pieces (wrapped in a positioned outer group) and queue previews
   // (dropped straight into a small dedicated SVG), so the player learns
   // one visual language for "what's in this piece" everywhere it appears.
+  // V0.10: the active layer renders as a glossy gradient circle (defined
+  // once in index.html's shared <defs> and referenced by url(#id) here --
+  // url() references resolve against the whole document, not just the
+  // local <svg> root, so one shared gradient set covers the board AND
+  // every separate piece-tray <svg>). Buried layers render as small
+  // rounded "pip" rects in a tight row -- a narrow, readable band rather
+  // than bulky dots, per the buried-color legibility pass.
+  function fillForColor(color) {
+    return 'url(#grad-' + color + ')';
+  }
+
   function buildPieceVisual(layers) {
     var g = svgEl('g', { class: 'piece-visual' });
     layerCircleSpecs(layers).forEach(function (spec) {
-      g.appendChild(svgEl('circle', {
-        cx: spec.cx,
-        cy: spec.cy,
-        r: spec.r,
-        fill: Config.COLORS[spec.color].hex,
-        class: 'layer-circle ' + (spec.active ? 'layer-active' : 'layer-pip'),
-        'data-layer-index': spec.layerIndex
-      }));
+      if (spec.active) {
+        g.appendChild(svgEl('circle', {
+          cx: spec.cx,
+          cy: spec.cy,
+          r: spec.r,
+          fill: fillForColor(spec.color),
+          class: 'layer-circle layer-active',
+          'data-layer-index': spec.layerIndex
+        }));
+      } else {
+        var pipSize = spec.r * 2;
+        g.appendChild(svgEl('rect', {
+          x: spec.cx - spec.r,
+          y: spec.cy - spec.r,
+          width: pipSize,
+          height: pipSize,
+          rx: spec.r * 0.55,
+          fill: fillForColor(spec.color),
+          class: 'layer-circle layer-pip',
+          'data-layer-index': spec.layerIndex
+        }));
+      }
     });
     return g;
   }
@@ -157,20 +182,89 @@
     boardSvg.style.aspectRatio = viewBox.w + ' / ' + viewBox.h;
   }
 
+  // ---- Mascot (V0.10) --------------------------------------------------------
+  // A small, deliberately simple traveler companion, built from plain SVG
+  // shapes (no image assets) so it stays lightweight and legible at any
+  // size. `mood` swaps the face: 'idle' (default) or 'happy' (level
+  // clear). The scarf color comes from the CSS variable --mascot-scarf,
+  // which the current region's theme controls -- so the same mascot
+  // subtly matches wherever the player currently is.
+  function buildMascotSVG(mood) {
+    var svg = svgEl('svg', { viewBox: '0 0 120 120' });
+
+    // Ears (behind the body).
+    svg.appendChild(svgEl('ellipse', { cx: 34, cy: 32, rx: 13, ry: 20, transform: 'rotate(-18 34 32)', class: 'mascot-ear' }));
+    svg.appendChild(svgEl('ellipse', { cx: 86, cy: 32, rx: 13, ry: 20, transform: 'rotate(18 86 32)', class: 'mascot-ear' }));
+    svg.appendChild(svgEl('ellipse', { cx: 34, cy: 34, rx: 6, ry: 12, transform: 'rotate(-18 34 34)', class: 'mascot-ear-inner' }));
+    svg.appendChild(svgEl('ellipse', { cx: 86, cy: 34, rx: 6, ry: 12, transform: 'rotate(18 86 34)', class: 'mascot-ear-inner' }));
+
+    // Body.
+    svg.appendChild(svgEl('ellipse', { cx: 60, cy: 74, rx: 36, ry: 32, class: 'mascot-body' }));
+
+    // Scarf.
+    var scarf = svgEl('path', {
+      d: 'M 27 62 Q 60 78 93 62 L 90 74 Q 60 88 30 74 Z',
+      class: 'mascot-scarf'
+    });
+    svg.appendChild(scarf);
+    svg.appendChild(svgEl('path', { d: 'M 68 72 L 76 96 L 64 92 L 66 74 Z', class: 'mascot-scarf-tail' }));
+
+    // Face.
+    if (mood === 'happy') {
+      svg.appendChild(svgEl('path', { d: 'M 42 62 Q 48 54 54 62', class: 'mascot-eye', fill: 'none' }));
+      svg.appendChild(svgEl('path', { d: 'M 66 62 Q 72 54 78 62', class: 'mascot-eye', fill: 'none' }));
+      svg.appendChild(svgEl('path', { d: 'M 48 74 Q 60 86 72 74', class: 'mascot-mouth', fill: 'none' }));
+      [[20, 22], [102, 30], [96, 88]].forEach(function (p) {
+        var star = svgEl('path', {
+          d: 'M0,-4 L1.2,-1.2 4,0 1.2,1.2 0,4 -1.2,1.2 -4,0 -1.2,-1.2 Z',
+          transform: 'translate(' + p[0] + ',' + p[1] + ')',
+          class: 'mascot-sparkle'
+        });
+        svg.appendChild(star);
+      });
+    } else {
+      svg.appendChild(svgEl('circle', { cx: 48, cy: 64, r: 3.2, class: 'mascot-eye-dot' }));
+      svg.appendChild(svgEl('circle', { cx: 72, cy: 64, r: 3.2, class: 'mascot-eye-dot' }));
+      svg.appendChild(svgEl('path', { d: 'M 54 76 Q 60 81 66 76', class: 'mascot-mouth', fill: 'none' }));
+    }
+    svg.appendChild(svgEl('ellipse', { cx: 60, cy: 70, rx: 2.2, ry: 1.6, class: 'mascot-nose' }));
+
+    return svg;
+  }
+
+  function renderMascotInto(el, mood) {
+    if (!el) return;
+    el.innerHTML = '';
+    el.appendChild(buildMascotSVG(mood));
+  }
+
   // ---- DOM references -------------------------------------------------------
 
   var boardSvg = document.getElementById('board-svg');
   var levelNameEl = document.getElementById('level-name');
+  var regionNameEl = document.getElementById('region-name');
   var currentPiecesEl = document.getElementById('current-pieces');
   var undoBtn = document.getElementById('undo-btn');
   var restartBtn = document.getElementById('restart-btn');
   var endOverlay = document.getElementById('end-overlay');
   var endMessage = document.getElementById('end-message');
   var endActionBtn = document.getElementById('end-action-btn');
+  var endMapBtn = document.getElementById('end-map-btn');
   var introBanner = document.getElementById('intro-banner');
   var introBannerText = document.getElementById('intro-banner-text');
   var clearCallout = document.getElementById('clear-callout');
   var levelSelectEl = document.getElementById('level-select');
+  var appEl = document.getElementById('app');
+  var titleScreenEl = document.getElementById('title-screen');
+  var mapScreenEl = document.getElementById('map-screen');
+  var gameScreenEl = document.getElementById('game-screen');
+  var playBtn = document.getElementById('play-btn');
+  var mapBtn = document.getElementById('map-btn');
+  var mapPathEl = document.getElementById('map-path');
+  var mapSubtitleEl = document.getElementById('map-subtitle');
+  var titleMascotEl = document.getElementById('title-mascot');
+  var boardMascotEl = document.getElementById('board-mascot');
+  var endMascotEl = document.getElementById('end-mascot');
 
   var SVG_NS = 'http://www.w3.org/2000/svg';
   function svgEl(tag, attrs) {
@@ -202,8 +296,84 @@
   // rule has been explained, it stays explained.
   var hasShownFirstClearTutorial = false;
 
+  // V0.10: which levels have been cleared this session, purely for the map
+  // screen's checkmark badge. Session-only (not persisted) on purpose --
+  // this is presentation, not a save system or a new gameplay mechanic;
+  // every level stays freely selectable from the map either way.
+  var completedLevels = {};
+
   function currentLevel() {
     return Config.LEVELS[currentLevelIndex];
+  }
+
+  // ---- Screens: title / map / game (V0.10) -----------------------------------
+  // A minimal 3-screen flow layered on top of the existing single-screen
+  // gameplay UI below, which is otherwise unchanged. `screen` is UI-only
+  // state, not part of Undo/Restart's history.
+
+  var screen = 'title'; // 'title' | 'map' | 'game'
+
+  function applyRegionTheme(levelIndex) {
+    appEl.setAttribute('data-region-index', String(levelIndex));
+  }
+
+  function showScreen(name) {
+    screen = name;
+    titleScreenEl.hidden = name !== 'title';
+    mapScreenEl.hidden = name !== 'map';
+    gameScreenEl.hidden = name !== 'game';
+    if (name === 'map') {
+      applyRegionTheme(currentLevelIndex);
+      renderMap();
+    }
+  }
+
+  function renderMap() {
+    mapPathEl.innerHTML = '';
+    mapSubtitleEl.textContent = currentLevel() ? 'You are in ' + currentLevel().region + '.' : 'Choose where to go next.';
+
+    Config.LEVELS.forEach(function (lvl, i) {
+      var row = document.createElement('div');
+      row.className = 'map-node-row';
+
+      if (i > 0) row.appendChild(document.createElement('div')).className = 'map-connector';
+
+      var node = document.createElement('button');
+      node.type = 'button';
+      var classes = ['map-node'];
+      if (i === currentLevelIndex) classes.push('current');
+      if (completedLevels[i]) classes.push('completed');
+      node.className = classes.join(' ');
+      node.textContent = String(i + 1);
+      node.title = lvl.name;
+      node.setAttribute('data-level-index', i);
+      node.addEventListener('click', function () {
+        goToLevel(i);
+        showScreen('game');
+      });
+      row.appendChild(node);
+
+      var label = document.createElement('div');
+      label.className = 'map-node-label';
+      label.textContent = lvl.region;
+      row.appendChild(label);
+
+      mapPathEl.appendChild(row);
+    });
+
+    // Mascot marker travels to whichever node is "current."
+    var marker = document.createElement('div');
+    marker.className = 'mascot-wrap mascot-wrap--map';
+    marker.appendChild(buildMascotSVG('idle'));
+    mapPathEl.appendChild(marker);
+    requestAnimationFrame(function () {
+      var currentBtn = mapPathEl.querySelector('.map-node.current');
+      if (!currentBtn) return;
+      var pathRect = mapPathEl.getBoundingClientRect();
+      var btnRect = currentBtn.getBoundingClientRect();
+      marker.style.left = (btnRect.left - pathRect.left + btnRect.width / 2 - 23 + mapPathEl.scrollLeft) + 'px';
+      marker.style.top = (btnRect.top - pathRect.top - 44 + mapPathEl.scrollTop) + 'px';
+    });
   }
 
   function buildInitialState() {
@@ -249,6 +419,8 @@
     selectedPieceSlot = null;
     isAnimating = false;
     loadLevelGeometry(currentLevel());
+    applyRegionTheme(currentLevelIndex);
+    renderMascotInto(boardMascotEl, 'idle');
     hideEndOverlay();
     renderAll();
     showIntroBannerIfNeeded();
@@ -267,9 +439,10 @@
     resetGame();
   }
 
-  // Developer-only convenience for playtesting: jump straight to any
-  // level without clearing the ones before it. Not part of the intended
-  // player-facing progression (see renderLevelSelect / #level-select).
+  // Used by both the player-facing map screen (renderMap) and the
+  // DEBUG-only developer level select (renderLevelSelect) -- jumps
+  // straight to any level without requiring the ones before it to be
+  // cleared first. This is a prototype: there is no lock/unlock system.
   function goToLevel(index) {
     if (index < 0 || index >= Config.LEVELS.length) return;
     currentLevelIndex = index;
@@ -304,10 +477,14 @@
   }
 
   // Small, visually-modest developer convenience: jump directly to any
-  // level for testing. Rebuilt only when the level count or current index
-  // could have changed (resetGame), not on every render.
+  // level for testing. Hidden from normal play -- the map screen is the
+  // real player-facing navigation now (see renderMap). Rebuilt only when
+  // the level count or current index could have changed (resetGame), not
+  // on every render.
   function renderLevelSelect() {
     if (!levelSelectEl) return;
+    levelSelectEl.hidden = !DEBUG;
+    if (!DEBUG) return;
     levelSelectEl.innerHTML = '';
     Config.LEVELS.forEach(function (lvl, i) {
       var btn = document.createElement('button');
@@ -471,6 +648,7 @@
 
   function renderTopBar() {
     levelNameEl.textContent = currentLevel().name;
+    if (regionNameEl) regionNameEl.textContent = currentLevel().region || '';
     // V0.9: move count is no longer shown to the player -- the only
     // success condition is clearing the whole board, not how many
     // placements it took. state.moveCount is still tracked internally
@@ -495,21 +673,23 @@
 
   function renderEndState() {
     if (state.status === 'won') {
+      completedLevels[currentLevelIndex] = true;
       var isLastLevel = currentLevelIndex === Config.LEVELS.length - 1;
       if (isLastLevel) {
-        showEndOverlay('PROTOTYPE COMPLETE', null);
+        showEndOverlay('JOURNEY COMPLETE', null, 'happy');
       } else {
-        showEndOverlay('LEVEL CLEARED', { label: 'Next Level', onClick: goToNextLevel });
+        showEndOverlay('LEVEL CLEARED', { label: 'Next Level', onClick: goToNextLevel }, 'happy');
       }
     } else if (state.status === 'lost') {
-      showEndOverlay('No more moves. Try again.', { label: 'Try Again', onClick: resetGame });
+      showEndOverlay('No more moves. Try again.', { label: 'Try Again', onClick: resetGame }, 'idle');
     } else {
       hideEndOverlay();
     }
   }
 
-  function showEndOverlay(message, action) {
+  function showEndOverlay(message, action, mascotMood) {
     endMessage.textContent = message;
+    renderMascotInto(endMascotEl, mascotMood || 'idle');
     if (action) {
       endActionBtn.hidden = false;
       endActionBtn.textContent = action.label;
@@ -812,5 +992,13 @@
   undoBtn.addEventListener('click', onUndo);
   restartBtn.addEventListener('click', resetGame);
 
+  // ---- Screen flow wiring (V0.10) --------------------------------------------
+
+  playBtn.addEventListener('click', function () { showScreen('map'); });
+  mapBtn.addEventListener('click', function () { showScreen('map'); });
+  endMapBtn.addEventListener('click', function () { hideEndOverlay(); showScreen('map'); });
+
+  renderMascotInto(titleMascotEl, 'idle');
   resetGame();
+  showScreen('title');
 })();

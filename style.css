@@ -1,16 +1,44 @@
 :root {
-  --bg: #f4f1ea;
-  --panel: #ffffff;
-  --ink: #33302b;
-  --ink-soft: #8a847a;
-  --accent: #5b7f6b;
-  --accent-ink: #ffffff;
-  --board-tile: #e7e2d6;
-  --board-tile-line: #d6d0c1;
-  --preview-valid: #86b89a;
+  /* ---- Cozy/magical base palette (V0.10 visual pass) ---- */
+  --ink: #2c2440;
+  --ink-soft: #8078a0;
+  --cream: #fbf3e6;
+  --cream-soft: #f3e9d8;
+  --twilight-1: #1b1440;
+  --twilight-2: #241a52;
+  --accent-gold: #e8b563;
+  --accent-gold-ink: #3a2a12;
+  --accent-teal: #5fb3a3;
+  --danger-soft: #d9776b;
+  --board-tile: #efe7d8;
+  --board-tile-line: #d9cdb4;
+  --preview-valid: #6fbf9e;
   --preview-invalid: #d98a8a;
-  --danger: #c1594f;
+
+  /* Gameplay token colors -- unchanged semantics from earlier versions,
+     kept as variables only so chrome around them can reference them too. */
+  --c-red: #e15c5c;
+  --c-purple: #8d6fd1;
+  --c-orange: #f0a04b;
+
+  /* Per-region scene theme, overridden by [data-region-index] below.
+     Falls back to Moonlit Peaks so nothing is ever unthemed. */
+  --scene-1: #1b1440;
+  --scene-2: #362a68;
+  --scene-accent: #e8b563;
+  --mascot-body: #f6ead9;
+  --mascot-scarf: #6f8fd1;
 }
+
+/* ---------- Region themes (flavor only -- never changes gameplay) ---------- */
+/* Index matches Config.LEVELS order: 0 Moonlit Peaks .. 5 Crystal Cavern. */
+
+[data-region-index="0"] { --scene-1: #171136; --scene-2: #362a68; --scene-accent: #cdb7ff; --mascot-scarf: #6f8fd1; }
+[data-region-index="1"] { --scene-1: #241a52; --scene-2: #7d5fa8; --scene-accent: #f3c9e0; --mascot-scarf: #b98fe0; }
+[data-region-index="2"] { --scene-1: #0f2e28; --scene-2: #1f5c46; --scene-accent: #bfe6a8; --mascot-scarf: #4f9d6e; }
+[data-region-index="3"] { --scene-1: #1c2f52; --scene-2: #2c7a86; --scene-accent: #ffd39b; --mascot-scarf: #4fb3a8; }
+[data-region-index="4"] { --scene-1: #3a2140; --scene-2: #9a5a3a; --scene-accent: #ffcf87; --mascot-scarf: #d98a4f; }
+[data-region-index="5"] { --scene-1: #14203f; --scene-2: #2a5a78; --scene-accent: #9be3e8; --mascot-scarf: #5fc9d1; }
 
 * {
   box-sizing: border-box;
@@ -20,7 +48,7 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--bg);
+  background: var(--twilight-1);
   color: var(--ink);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
@@ -32,86 +60,461 @@ body {
   min-height: 100vh;
 }
 
+.shared-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
 .app {
   width: 100%;
   max-width: 430px;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  background: var(--twilight-1);
   position: relative;
+  overflow: hidden;
 }
 
-/* ---------- Top bar ---------- */
+/* ---------- Screens (title / map / game) ---------- */
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  animation: screen-fade-in 320ms ease both;
+}
+
+.screen[hidden] {
+  display: none;
+}
+
+@keyframes screen-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Scenic backdrop shared by all three screens: a soft two-tone gradient
+   "sky" plus a subtle star field and a warm glow, entirely CSS -- no
+   image assets. Kept BEHIND everything and never receives pointer
+   events, so it can never interfere with gameplay input. */
+
+.scene {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(160deg, var(--scene-1) 0%, var(--scene-2) 100%);
+  transition: background 500ms ease;
+  overflow: hidden;
+}
+
+.scene-stars {
+  position: absolute;
+  inset: 0;
+  opacity: 0.55;
+  background-image:
+    radial-gradient(1.4px 1.4px at 10% 18%, #ffffff 100%, transparent 60%),
+    radial-gradient(1.2px 1.2px at 26% 32%, #ffffff 100%, transparent 60%),
+    radial-gradient(1.6px 1.6px at 42% 12%, #ffffff 100%, transparent 60%),
+    radial-gradient(1.2px 1.2px at 61% 26%, #ffffff 100%, transparent 60%),
+    radial-gradient(1.4px 1.4px at 76% 15%, #ffffff 100%, transparent 60%),
+    radial-gradient(1.2px 1.2px at 88% 34%, #ffffff 100%, transparent 60%),
+    radial-gradient(1.6px 1.6px at 19% 52%, #ffffff 100%, transparent 60%),
+    radial-gradient(1.2px 1.2px at 70% 55%, #ffffff 100%, transparent 60%);
+  background-repeat: no-repeat;
+}
+
+.scene-glow {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 220px;
+  height: 220px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, var(--scene-accent) 0%, transparent 72%);
+  opacity: 0.28;
+  filter: blur(2px);
+  animation: glow-breathe 6s ease-in-out infinite;
+}
+
+@keyframes glow-breathe {
+  0%, 100% { opacity: 0.22; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.34; transform: translate(-50%, -50%) scale(1.06); }
+}
+
+/* Game screen's scene sits low-key and static (readability first), and
+   its glow is repositioned near the board rather than centered. */
+.scene--game .scene-glow {
+  top: 44%;
+  width: 260px;
+  height: 260px;
+  opacity: 0.16;
+  animation: none;
+}
+
+/* ---------- Mascot (shared across title / board / end-card / map) ---------- */
+/* A small, deliberately simple traveler -- soft body, two ears, a scarf
+   in the current region's accent, and a face that switches mood via a
+   CSS class. Geometry lives in JS (buildMascotSVG); this just sizes and
+   places the wrapper per context. */
+
+.mascot-wrap {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.mascot-wrap svg {
+  display: block;
+  filter: drop-shadow(0 6px 10px rgba(20, 14, 40, 0.35));
+}
+
+.mascot-wrap--title {
+  width: 128px;
+  height: 128px;
+  margin-bottom: 6px;
+  animation: mascot-bob 3.4s ease-in-out infinite;
+}
+
+.mascot-wrap--board {
+  position: absolute;
+  right: 6px;
+  bottom: 2px;
+  width: 56px;
+  height: 56px;
+  z-index: 2;
+  animation: mascot-bob 3.8s ease-in-out infinite;
+}
+
+.mascot-wrap--end {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 4px;
+}
+
+.mascot-wrap--map {
+  width: 46px;
+  height: 46px;
+  position: absolute;
+  pointer-events: none;
+  transition: left 420ms ease, top 420ms ease;
+  animation: mascot-bob 3s ease-in-out infinite;
+}
+
+@keyframes mascot-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+.mascot-sparkle {
+  animation: sparkle-twinkle 1.4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+  fill: var(--accent-gold);
+}
+
+@keyframes sparkle-twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.mascot-body { fill: var(--mascot-body); stroke: rgba(44, 36, 64, 0.12); stroke-width: 1; }
+.mascot-ear { fill: var(--mascot-body); stroke: rgba(44, 36, 64, 0.12); stroke-width: 1; }
+.mascot-ear-inner { fill: #f1c9c9; opacity: 0.7; }
+.mascot-scarf { fill: var(--mascot-scarf); }
+.mascot-scarf-tail { fill: var(--mascot-scarf); opacity: 0.92; }
+.mascot-eye-dot { fill: #2c2440; }
+.mascot-eye { stroke: #2c2440; stroke-width: 2.4; stroke-linecap: round; }
+.mascot-mouth { stroke: #2c2440; stroke-width: 2; stroke-linecap: round; opacity: 0.75; }
+.mascot-nose { fill: #b98a7a; }
+
+/* ---------- Title screen ---------- */
+
+.title-screen {
+  align-items: center;
+  justify-content: center;
+}
+
+.title-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 32px;
+}
+
+.game-title {
+  margin: 0;
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--cream);
+  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+}
+
+.tagline {
+  margin: 6px 0 28px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--scene-accent);
+  opacity: 0.9;
+}
+
+.btn-play {
+  min-width: 180px;
+  font-size: 17px;
+}
+
+.title-flavor {
+  margin-top: 22px;
+  max-width: 260px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(251, 243, 230, 0.7);
+}
+
+/* ---------- Map screen ---------- */
+
+.map-header {
+  position: relative;
+  z-index: 1;
+  padding: 22px 24px 4px;
+  text-align: center;
+}
+
+.map-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--cream);
+}
+
+.map-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: rgba(251, 243, 230, 0.65);
+}
+
+.map-path {
+  position: relative;
+  z-index: 1;
+  /* .mascot-wrap--map's left/top are computed in JS relative to this
+     element's own bounding box (renderMap), so it must be the positioning
+     context -- not an ancestor .screen. */
+  flex: 1;
+  padding: 28px 20px 40px;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 34px;
+  overflow-y: auto;
+}
+
+.map-node-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-node-row:nth-child(odd) { align-self: flex-start; margin-left: 14%; }
+.map-node-row:nth-child(even) { align-self: flex-end; margin-right: 14%; }
+
+.map-connector {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 2px;
+  height: 34px;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(251, 243, 230, 0.5) 0 4px,
+    transparent 4px 9px
+  );
+}
+
+.map-node {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  background: linear-gradient(160deg, var(--cream) 0%, var(--cream-soft) 100%);
+  color: var(--ink);
+  font-size: 19px;
+  font-weight: 800;
+  box-shadow: 0 6px 16px rgba(10, 6, 30, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.map-node:active {
+  transform: scale(0.93);
+}
+
+.map-node.current {
+  background: linear-gradient(160deg, var(--accent-gold) 0%, #d99a3f 100%);
+  color: var(--accent-gold-ink);
+  box-shadow: 0 0 0 4px rgba(232, 181, 99, 0.28), 0 8px 20px rgba(10, 6, 30, 0.4);
+}
+
+.map-node.completed::after {
+  content: "\2713";
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--accent-teal);
+  color: #0d2b26;
+  font-size: 12px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.map-node-label {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 120px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(251, 243, 230, 0.85);
+  line-height: 1.3;
+}
+
+/* ---------- Game screen: top bar ---------- */
+
+.game-screen {
+  background: var(--twilight-1);
+}
 
 .top-bar {
+  position: relative;
+  z-index: 1;
   display: flex;
-  align-items: baseline;
-  padding: 18px 20px 8px;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 16px 8px;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(251, 243, 230, 0.12);
+  color: var(--cream);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 120ms ease, transform 120ms ease;
+}
+
+.icon-btn:active {
+  transform: scale(0.92);
+  background: rgba(251, 243, 230, 0.22);
 }
 
 .title-group {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 
-.title {
-  margin: 0;
-  font-size: 22px;
+.region-name {
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--scene-accent);
 }
 
 .level-name {
-  font-size: 13px;
-  color: var(--ink-soft);
-  font-weight: 600;
+  font-size: 15px;
+  color: var(--cream);
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* V0.9: move count and gravity-mode indicators are gone -- the only
-   player-facing success condition is clearing the whole board, and
-   Step Gravity is no longer part of normal play. */
-
-/* ---------- Developer level select (V0.6) ----------
-   Deliberately plain/utilitarian -- a testing convenience, not a
-   player-facing feature. No stars, no world map, no progress bar. */
+/* Developer level select: hidden from normal play (see DEBUG in game.js)
+   -- the player-facing map screen is the real navigation now. */
 
 .level-select {
   display: flex;
   gap: 6px;
-  padding: 0 20px 8px;
+  margin-left: auto;
 }
 
 .level-select-btn {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   border-radius: 6px;
-  border: 1px solid var(--board-tile-line);
-  background: var(--panel);
-  color: var(--ink-soft);
-  font-size: 12px;
+  border: 1px solid rgba(251, 243, 230, 0.3);
+  background: transparent;
+  color: var(--cream);
+  font-size: 11px;
   font-weight: 600;
   cursor: pointer;
   padding: 0;
 }
 
 .level-select-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--accent-gold);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold-ink);
 }
 
-/* ---------- Board ---------- */
+/* ---------- Board area ---------- */
 
 .board-area {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
+  padding: 8px 16px;
   position: relative;
   min-height: 0;
+  z-index: 1;
+}
+
+.board-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border-radius: 22px;
+  background: linear-gradient(165deg, rgba(251, 243, 230, 0.08) 0%, rgba(251, 243, 230, 0.02) 100%);
+  border: 1px solid rgba(251, 243, 230, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 14px 30px rgba(6, 4, 20, 0.35);
 }
 
 #board-svg {
@@ -123,7 +526,7 @@ body {
   width: auto;
   height: 100%;
   max-width: 100%;
-  max-height: 56vh;
+  max-height: 52vh;
   touch-action: manipulation;
   user-select: none;
 }
@@ -146,7 +549,7 @@ body {
 }
 
 .hex-tile.debug-legal {
-  stroke: var(--accent);
+  stroke: var(--accent-teal);
   stroke-width: 1;
 }
 
@@ -167,6 +570,7 @@ body {
 .piece-visual {
   transform-box: fill-box;
   transform-origin: center;
+  filter: url(#piece-shadow);
 }
 
 .piece-visual.token-pop {
@@ -174,16 +578,17 @@ body {
 }
 
 .layer-circle {
-  stroke: rgba(255, 255, 255, 0.6);
+  stroke: rgba(255, 255, 255, 0.55);
   stroke-width: 0.3;
 }
 
 .layer-active {
-  stroke-width: 0.4;
+  stroke-width: 0.35;
 }
 
 .layer-pip {
-  opacity: 0.95;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 0.25;
 }
 
 .layer-active.clearing {
@@ -246,13 +651,13 @@ body {
 
 .intro-banner p {
   margin: 0;
-  background: var(--panel);
+  background: var(--cream);
   color: var(--ink);
   font-size: 13px;
   font-weight: 600;
   padding: 10px 16px;
   border-radius: 999px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
   text-align: center;
 }
 
@@ -262,8 +667,8 @@ body {
   left: 50%;
   z-index: 6;
   transform: translate(-50%, -50%) scale(0.7);
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: linear-gradient(160deg, var(--accent-gold) 0%, #d99a3f 100%);
+  color: var(--accent-gold-ink);
   font-size: 20px;
   font-weight: 800;
   letter-spacing: 0.03em;
@@ -271,7 +676,7 @@ body {
   border-radius: 16px;
   pointer-events: none;
   opacity: 0;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
   transition: opacity 220ms ease, transform 220ms ease;
 }
 
@@ -287,10 +692,13 @@ body {
 /* ---------- Bottom bar / pieces ---------- */
 
 .bottom-bar {
-  padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
-  background: var(--panel);
-  border-top: 1px solid var(--board-tile-line);
-  border-radius: 20px 20px 0 0;
+  position: relative;
+  z-index: 1;
+  padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: var(--cream);
+  border-top: 1px solid rgba(44, 36, 64, 0.08);
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -8px 24px rgba(6, 4, 20, 0.28);
 }
 
 .pieces-section {
@@ -306,13 +714,13 @@ body {
   flex: 1;
   min-height: 84px;
   border-radius: 16px;
-  background: var(--bg);
+  background: var(--cream-soft);
   border: 2px solid transparent;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 8px;
-  transition: border-color 120ms ease, transform 120ms ease;
+  transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
 }
 
 .current-row .piece-slot {
@@ -324,8 +732,8 @@ body {
 }
 
 .current-row .piece-slot.selected {
-  border-color: var(--accent);
-  background: #eaf1ec;
+  border-color: var(--accent-teal);
+  background: #e3f2ec;
 }
 
 .current-row .piece-slot.empty {
@@ -350,9 +758,10 @@ body {
   border-radius: 14px;
   padding: 14px 10px;
   font-size: 15px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
   min-height: 48px;
+  transition: transform 120ms ease, filter 120ms ease;
 }
 
 .btn[hidden] {
@@ -374,8 +783,13 @@ body {
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: linear-gradient(160deg, var(--accent-gold) 0%, #d99a3f 100%);
+  color: var(--accent-gold-ink);
+  box-shadow: 0 6px 16px rgba(217, 154, 63, 0.35);
+}
+
+.btn-primary:active {
+  filter: brightness(0.96);
 }
 
 /* ---------- End-of-game overlay ---------- */
@@ -383,7 +797,8 @@ body {
 .end-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(51, 48, 43, 0.45);
+  z-index: 4;
+  background: rgba(20, 14, 40, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -396,19 +811,26 @@ body {
 }
 
 .end-card {
-  background: var(--panel);
-  border-radius: 18px;
-  padding: 28px 24px;
+  background: var(--cream);
+  border-radius: 20px;
+  padding: 26px 24px 22px;
   text-align: center;
   max-width: 320px;
   width: 100%;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+  animation: end-card-in 260ms ease both;
+}
+
+@keyframes end-card-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .end-message {
   font-size: 19px;
-  font-weight: 700;
+  font-weight: 800;
   margin: 0 0 18px;
+  color: var(--ink);
 }
 
 .end-actions {
@@ -417,6 +839,7 @@ body {
 }
 
 @media (max-width: 380px) {
-  .title { font-size: 19px; }
+  .game-title { font-size: 34px; }
+  .level-name { font-size: 14px; }
   .btn { font-size: 14px; padding: 12px 8px; }
 }

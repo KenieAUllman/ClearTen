@@ -7,44 +7,120 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="app">
-    <header class="top-bar">
-      <div class="title-group">
-        <h1 class="title">ClearTen</h1>
-        <div class="level-name" id="level-name"></div>
-      </div>
-    </header>
+  <!-- Shared SVG resources (gradients + soft-shadow filter) referenced by
+       url(#id) from every piece/mascot SVG in the document, regardless of
+       which <svg> root they live in -- id references resolve against the
+       whole HTML document, not just their local SVG root, so one shared
+       <defs> block here is enough for the board, every piece-tray preview,
+       and the mascot. -->
+  <svg class="shared-defs" aria-hidden="true">
+    <defs>
+      <radialGradient id="grad-red" cx="35%" cy="30%" r="75%">
+        <stop offset="0%" stop-color="#ff9c8f" />
+        <stop offset="55%" stop-color="#e15c5c" />
+        <stop offset="100%" stop-color="#b83f3f" />
+      </radialGradient>
+      <radialGradient id="grad-purple" cx="35%" cy="30%" r="75%">
+        <stop offset="0%" stop-color="#c3aef2" />
+        <stop offset="55%" stop-color="#8d6fd1" />
+        <stop offset="100%" stop-color="#6650a8" />
+      </radialGradient>
+      <radialGradient id="grad-orange" cx="35%" cy="30%" r="75%">
+        <stop offset="0%" stop-color="#ffce93" />
+        <stop offset="55%" stop-color="#f0a04b" />
+        <stop offset="100%" stop-color="#c97a2c" />
+      </radialGradient>
+      <filter id="piece-shadow" x="-50%" y="-50%" width="200%" height="200%">
+        <feDropShadow dx="0" dy="0.5" stdDeviation="0.6" flood-color="#2c2440" flood-opacity="0.35" />
+      </filter>
+    </defs>
+  </svg>
 
-    <div id="level-select" class="level-select" aria-label="Developer level select"></div>
+  <div class="app" id="app">
 
-    <main class="board-area">
-      <div id="intro-banner" class="intro-banner" hidden>
-        <p id="intro-banner-text"></p>
+    <!-- ============================= TITLE SCREEN ============================= -->
+    <section class="screen title-screen" id="title-screen">
+      <div class="scene scene--title" aria-hidden="true">
+        <div class="scene-stars"></div>
+        <div class="scene-glow"></div>
       </div>
-      <div id="clear-callout" class="clear-callout" hidden>10+ CLEAR!</div>
-      <svg id="board-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
-      <div id="end-overlay" class="end-overlay" hidden>
-        <div class="end-card">
-          <p id="end-message" class="end-message"></p>
-          <div class="end-actions">
-            <button id="end-action-btn" class="btn btn-primary"></button>
+      <div class="title-content">
+        <div class="mascot-wrap mascot-wrap--title" id="title-mascot"></div>
+        <h1 class="game-title">ClearTen</h1>
+        <p class="tagline">Small puzzles. Big places.</p>
+        <button type="button" class="btn btn-primary btn-play" id="play-btn">Play</button>
+        <p class="title-flavor">A cozy puzzle journey through a more colorful world.</p>
+      </div>
+    </section>
+
+    <!-- ============================== MAP SCREEN =============================== -->
+    <section class="screen map-screen" id="map-screen" hidden>
+      <div class="scene scene--map" aria-hidden="true">
+        <div class="scene-stars"></div>
+        <div class="scene-glow"></div>
+      </div>
+      <header class="map-header">
+        <h2 class="map-title">ClearTen</h2>
+        <p class="map-subtitle" id="map-subtitle">Choose where to go next.</p>
+      </header>
+      <div class="map-path" id="map-path"></div>
+    </section>
+
+    <!-- ============================== GAME SCREEN ============================== -->
+    <section class="screen game-screen" id="game-screen" hidden>
+      <div class="scene scene--game" id="game-scene" aria-hidden="true">
+        <div class="scene-glow"></div>
+      </div>
+
+      <header class="top-bar">
+        <button type="button" class="icon-btn" id="map-btn" aria-label="Back to map">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M9 20L3 17.5V4.5L9 7M9 20L15 17.5M9 20V7M15 17.5L21 20V7L15 4.5M15 17.5V4.5M9 7L15 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>
+        </button>
+        <div class="title-group">
+          <div class="region-name" id="region-name"></div>
+          <div class="level-name" id="level-name"></div>
+        </div>
+        <div id="level-select" class="level-select" aria-label="Developer level select" hidden></div>
+      </header>
+
+      <main class="board-area">
+        <div class="mascot-wrap mascot-wrap--board" id="board-mascot"></div>
+
+        <div id="intro-banner" class="intro-banner" hidden>
+          <p id="intro-banner-text"></p>
+        </div>
+        <div id="clear-callout" class="clear-callout" hidden>10+ CLEAR!</div>
+
+        <div class="board-frame">
+          <svg id="board-svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
+        </div>
+
+        <div id="end-overlay" class="end-overlay" hidden>
+          <div class="end-card">
+            <div class="mascot-wrap mascot-wrap--end" id="end-mascot"></div>
+            <p id="end-message" class="end-message"></p>
+            <div class="end-actions">
+              <button type="button" id="end-action-btn" class="btn btn-primary"></button>
+              <button type="button" id="end-map-btn" class="btn btn-secondary">Map</button>
+            </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
 
-    <footer class="bottom-bar">
-      <div class="pieces-section">
-        <div id="current-pieces" class="piece-row current-row"></div>
-      </div>
-      <div class="controls-row">
-        <!-- V0.7: Undo is a developer/debug-only tool now (see DEBUG in
-             game.js) -- normal play only has Restart. This button stays
-             hidden unless DEBUG is true. -->
-        <button id="undo-btn" class="btn btn-secondary" hidden>Undo (debug)</button>
-        <button id="restart-btn" class="btn btn-secondary">Restart</button>
-      </div>
-    </footer>
+      <footer class="bottom-bar">
+        <div class="pieces-section">
+          <div id="current-pieces" class="piece-row current-row"></div>
+        </div>
+        <div class="controls-row">
+          <!-- V0.7: Undo is a developer/debug-only tool now (see DEBUG in
+               game.js) -- normal play only has Restart. This button stays
+               hidden unless DEBUG is true. -->
+          <button type="button" id="undo-btn" class="btn btn-secondary" hidden>Undo (debug)</button>
+          <button type="button" id="restart-btn" class="btn btn-secondary">Restart</button>
+        </div>
+      </footer>
+    </section>
+
   </div>
 
   <script src="gamelogic.js"></script>
